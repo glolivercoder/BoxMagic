@@ -189,9 +189,29 @@ class _ItemsScreenState extends State<ItemsScreen> {
                               ),
                             ),
                             const SizedBox(height: 8),
-                            ElevatedButton(
-                              onPressed: _showNewItemDialog,
-                              child: const Text('Adicionar novo objeto'),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                ElevatedButton.icon(
+                                  onPressed: _showNewItemDialog,
+                                  icon: const Icon(Icons.add),
+                                  label: const Text('Adicionar manualmente'),
+                                  style: ElevatedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                ElevatedButton.icon(
+                                  onPressed: _showObjectRecognition,
+                                  icon: const Icon(Icons.camera_alt),
+                                  label: const Text('Identificar com câmera'),
+                                  style: ElevatedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                    backgroundColor: Colors.green,
+                                    foregroundColor: Colors.white,
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
@@ -241,11 +261,24 @@ class _ItemsScreenState extends State<ItemsScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showNewItemDialog,
-        tooltip: 'Adicionar novo objeto',
-        heroTag: 'items_fab',
-        child: const Icon(Icons.add),
+      floatingActionButton: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          FloatingActionButton(
+            onPressed: _showObjectRecognition,
+            tooltip: 'Identificar objeto com câmera',
+            heroTag: 'items_camera_fab',
+            backgroundColor: Colors.green,
+            child: const Icon(Icons.camera_enhance),
+          ),
+          const SizedBox(width: 16),
+          FloatingActionButton(
+            onPressed: _showNewItemDialog,
+            tooltip: 'Adicionar novo objeto',
+            heroTag: 'items_add_fab',
+            child: const Icon(Icons.add),
+          ),
+        ],
       ),
     );
   }
