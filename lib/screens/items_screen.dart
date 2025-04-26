@@ -2,9 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:boxmagic/models/item.dart';
 import 'package:boxmagic/models/box.dart';
 import 'package:boxmagic/services/database_helper.dart';
+import 'package:boxmagic/services/persistence_service.dart';
 import 'package:boxmagic/widgets/new_item_dialog.dart';
 import 'package:boxmagic/screens/item_detail_screen.dart';
 import 'package:boxmagic/screens/object_recognition_screen.dart';
+import 'package:boxmagic/screens/report_screen.dart';
+import 'dart:async';
+import 'package:flutter/services.dart';
 
 class ItemsScreen extends StatefulWidget {
   const ItemsScreen({Key? key}) : super(key: key);
@@ -15,6 +19,7 @@ class ItemsScreen extends StatefulWidget {
 
 class _ItemsScreenState extends State<ItemsScreen> {
   final DatabaseHelper _databaseHelper = DatabaseHelper.instance;
+  final PersistenceService _persistenceService = PersistenceService();
   List<Item> _items = [];
   List<Box> _boxes = [];
   bool _isLoading = true;
@@ -33,16 +38,44 @@ class _ItemsScreenState extends State<ItemsScreen> {
     });
 
     try {
+      // Depurar dados armazenados
+      await _persistenceService.debugShowAllKeys();
+
       // Primeiro carregamos as caixas
       final boxes = await _databaseHelper.readAllBoxes();
       print('Caixas carregadas: ${boxes.length}');
+
+      if (boxes.isEmpty) {
+        // Tentar carregar diretamente do SharedPreferences
+        final data = await _persistenceService.loadAllData();
+        final persistedBoxes = data['boxes'] as List<Box>;
+        print('Caixas carregadas diretamente do SharedPreferences: ${persistedBoxes.length}');
+
+        if (persistedBoxes.isNotEmpty) {
+          // Atualizar o DatabaseHelper com os dados carregados
+          for (final box in persistedBoxes) {
+            await _databaseHelper.createBox(box);
+          }
+
+          // Carregar novamente
+          final updatedBoxes = await _databaseHelper.readAllBoxes();
+          print('Caixas recarregadas: ${updatedBoxes.length}');
+
+          setState(() {
+            _boxes = updatedBoxes;
+          });
+        }
+      } else {
+        setState(() {
+          _boxes = boxes;
+        });
+      }
 
       // Depois carregamos os itens
       final items = await _databaseHelper.readAllItems();
       print('Itens carregados: ${items.length}');
 
       setState(() {
-        _boxes = boxes;
         _items = items;
         _filteredItems = items;
         _isLoading = false;
@@ -60,6 +93,58 @@ class _ItemsScreenState extends State<ItemsScreen> {
         );
       }
     }
+  }
+
+  // Método para depuração - mostrar informações sobre as caixas
+  void _debugBoxes() {
+    if (_boxes.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Nenhuma caixa encontrada')),
+      );
+    } else {
+      String boxesInfo = 'Caixas disponíveis (${_boxes.length}):\n';
+      for (final box in _boxes) {
+        boxesInfo += '- ID: ${box.id}, Nome: ${box.name}\n';
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(boxesInfo),
+          duration: const Duration(seconds: 10),
+          action: SnackBarAction(
+            label: 'OK',
+            onPressed: () {},
+          ),
+        ),
+      );
+    }
+  }
+
+  // Método para gerar relatório
+  Future<void> _generateReport() async {
+    if (_boxes.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Não há caixas para gerar relatório'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // Garantir que temos os dados mais recentes
+    await _loadData();
+
+    // Navegar para a tela de relatório
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ReportScreen(
+          boxes: _boxes,
+          items: _items,
+        ),
+      ),
+    );
   }
 
   void _filterItems(String query) {
@@ -137,10 +222,23 @@ class _ItemsScreenState extends State<ItemsScreen> {
       appBar: AppBar(
         title: const Text('Meus Objetos'),
         actions: [
+          // Botão de relatório
+          IconButton(
+            icon: const Icon(Icons.summarize),
+            onPressed: _generateReport,
+            tooltip: 'Gerar relatório',
+          ),
+          // Botão de câmera para reconhecimento de objetos
           IconButton(
             icon: const Icon(Icons.camera_alt),
             onPressed: _showObjectRecognition,
             tooltip: 'Identificar objeto com IA',
+          ),
+          // Botão de depuração (temporário)
+          IconButton(
+            icon: const Icon(Icons.bug_report),
+            onPressed: _debugBoxes,
+            tooltip: 'Depurar caixas',
           ),
         ],
       ),

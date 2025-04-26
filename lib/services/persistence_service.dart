@@ -22,39 +22,39 @@ class PersistenceService {
     required List<User> users,
   }) async {
     final prefs = await SharedPreferences.getInstance();
-    
+
     // Converter objetos para JSON
     final boxesJson = boxes.map((box) => jsonEncode(box.toMap())).toList();
     final itemsJson = items.map((item) => jsonEncode(item.toMap())).toList();
     final usersJson = users.map((user) => jsonEncode(user.toMap())).toList();
-    
+
     // Salvar no SharedPreferences
     await prefs.setStringList(_boxesKey, boxesJson);
     await prefs.setStringList(_itemsKey, itemsJson);
     await prefs.setStringList(_usersKey, usersJson);
-    
+
     // Registrar horário da sincronização
     await prefs.setString(_lastSyncKey, DateTime.now().toIso8601String());
-    
+
     print('Dados salvos com sucesso! Boxes: ${boxes.length}, Items: ${items.length}, Users: ${users.length}');
   }
 
   // Carregar dados
   Future<Map<String, dynamic>> loadAllData() async {
     final prefs = await SharedPreferences.getInstance();
-    
+
     // Obter dados do SharedPreferences
     final boxesJson = prefs.getStringList(_boxesKey) ?? [];
     final itemsJson = prefs.getStringList(_itemsKey) ?? [];
     final usersJson = prefs.getStringList(_usersKey) ?? [];
-    
+
     // Converter JSON para objetos
     final boxes = boxesJson.map((json) => Box.fromMap(jsonDecode(json))).toList();
     final items = itemsJson.map((json) => Item.fromMap(jsonDecode(json))).toList();
     final users = usersJson.map((json) => User.fromMap(jsonDecode(json))).toList();
-    
+
     print('Dados carregados com sucesso! Boxes: ${boxes.length}, Items: ${items.length}, Users: ${users.length}');
-    
+
     return {
       'boxes': boxes,
       'items': items,
@@ -86,5 +86,31 @@ class PersistenceService {
     await prefs.remove(_usersKey);
     await prefs.remove(_lastSyncKey);
     print('Todos os dados persistentes foram removidos');
+  }
+
+  // Método para depuração - mostrar todas as chaves armazenadas
+  Future<void> debugShowAllKeys() async {
+    final prefs = await SharedPreferences.getInstance();
+    final keys = prefs.getKeys();
+    print('===== CHAVES ARMAZENADAS =====');
+    for (final key in keys) {
+      print('Chave: $key');
+      if (key.contains('boxmagic_boxes')) {
+        final boxesJson = prefs.getStringList(key) ?? [];
+        print('  Caixas: ${boxesJson.length}');
+        for (int i = 0; i < boxesJson.length; i++) {
+          final box = Box.fromMap(jsonDecode(boxesJson[i]));
+          print('    Caixa $i: ID=${box.id}, Nome=${box.name}');
+        }
+      } else if (key.contains('boxmagic_items')) {
+        final itemsJson = prefs.getStringList(key) ?? [];
+        print('  Itens: ${itemsJson.length}');
+        for (int i = 0; i < itemsJson.length; i++) {
+          final item = Item.fromMap(jsonDecode(itemsJson[i]));
+          print('    Item $i: ID=${item.id}, Nome=${item.name}, BoxID=${item.boxId}');
+        }
+      }
+    }
+    print('==============================');
   }
 }
