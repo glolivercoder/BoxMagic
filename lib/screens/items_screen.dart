@@ -4,20 +4,54 @@ import 'package:boxmagic/models/box.dart';
 import 'package:boxmagic/services/database_helper.dart';
 import 'package:boxmagic/services/persistence_service.dart';
 import 'package:boxmagic/widgets/new_item_dialog.dart';
+import 'package:boxmagic/widgets/new_box_dialog.dart';
 import 'package:boxmagic/screens/item_detail_screen.dart';
 import 'package:boxmagic/screens/object_recognition_screen.dart';
 import 'package:boxmagic/screens/report_screen.dart';
+import 'package:boxmagic/screens/boxes_screen.dart';
 import 'dart:async';
 import 'package:flutter/services.dart';
 
 class ItemsScreen extends StatefulWidget {
   const ItemsScreen({Key? key}) : super(key: key);
 
+  // Métodos públicos para serem chamados de fora
+  void showNewBoxDialog(BuildContext context) async {
+    if (_itemsScreenState != null) {
+      // Criar uma nova caixa e depois atualizar a lista
+      final boxesScreen = BoxesScreen();
+      boxesScreen.showNewBoxDialog(context);
+
+      // Recarregar os dados após criar a caixa
+      await Future.delayed(const Duration(milliseconds: 500));
+      _itemsScreenState!._loadData();
+    }
+  }
+
+  void generateReport(BuildContext context) {
+    if (_itemsScreenState != null) {
+      _itemsScreenState!._generateReport();
+    }
+  }
+
+  void showObjectRecognition(BuildContext context) {
+    if (_itemsScreenState != null) {
+      _itemsScreenState!._showObjectRecognition();
+    }
+  }
+
   @override
   _ItemsScreenState createState() => _ItemsScreenState();
 }
 
-class _ItemsScreenState extends State<ItemsScreen> {
+// Referência estática para acessar o estado da tela de itens
+_ItemsScreenState? _itemsScreenState;
+
+class _ItemsScreenState extends State<ItemsScreen> with AutomaticKeepAliveClientMixin {
+  // Construtor com referência estática
+  _ItemsScreenState() {
+    _itemsScreenState = this;
+  }
   final DatabaseHelper _databaseHelper = DatabaseHelper.instance;
   final PersistenceService _persistenceService = PersistenceService();
   List<Item> _items = [];
@@ -25,6 +59,9 @@ class _ItemsScreenState extends State<ItemsScreen> {
   bool _isLoading = true;
   final TextEditingController _searchController = TextEditingController();
   List<Item> _filteredItems = [];
+
+  @override
+  bool get wantKeepAlive => true; // Manter o estado quando mudar de aba
 
   @override
   void initState() {
@@ -218,30 +255,11 @@ class _ItemsScreenState extends State<ItemsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Chamada necessária para AutomaticKeepAliveClientMixin
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Meus Objetos'),
-        actions: [
-          // Botão de relatório
-          IconButton(
-            icon: const Icon(Icons.summarize),
-            onPressed: _generateReport,
-            tooltip: 'Gerar relatório',
-          ),
-          // Botão de câmera para reconhecimento de objetos
-          IconButton(
-            icon: const Icon(Icons.camera_alt),
-            onPressed: _showObjectRecognition,
-            tooltip: 'Identificar objeto com IA',
-          ),
-          // Botão de depuração (temporário)
-          IconButton(
-            icon: const Icon(Icons.bug_report),
-            onPressed: _debugBoxes,
-            tooltip: 'Depurar caixas',
-          ),
-        ],
-      ),
+      appBar: null, // Removendo a AppBar duplicada
+      extendBody: true,
+      extendBodyBehindAppBar: true,
       body: Column(
         children: [
           Padding(

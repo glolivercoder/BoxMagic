@@ -10,16 +10,51 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 class BoxesScreen extends StatefulWidget {
   const BoxesScreen({Key? key}) : super(key: key);
 
+  // Métodos públicos para serem chamados de fora
+  void showBarcodeScanner(BuildContext context) {
+    if (_boxesScreenState != null) {
+      _boxesScreenState!._showBarcodeScanner();
+    }
+  }
+
+  void showBoxIdRecognition(BuildContext context) {
+    if (_boxesScreenState != null) {
+      _boxesScreenState!._showBoxIdRecognition();
+    }
+  }
+
+  void showPrintLabelsDialog(BuildContext context) {
+    if (_boxesScreenState != null) {
+      _boxesScreenState!._showPrintLabelsDialog();
+    }
+  }
+
+  void showNewBoxDialog(BuildContext context) {
+    if (_boxesScreenState != null) {
+      _boxesScreenState!._showNewBoxDialog();
+    }
+  }
+
   @override
   _BoxesScreenState createState() => _BoxesScreenState();
 }
 
-class _BoxesScreenState extends State<BoxesScreen> {
+// Referência estática para acessar o estado da tela de caixas
+_BoxesScreenState? _boxesScreenState;
+
+class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClientMixin {
+  // Construtor com referência estática
+  _BoxesScreenState() {
+    _boxesScreenState = this;
+  }
   final DatabaseHelper _databaseHelper = DatabaseHelper.instance;
   final PreferencesService _preferencesService = PreferencesService();
   List<Box> _boxes = [];
   bool _isLoading = true;
   final TextEditingController _searchController = TextEditingController();
+
+  @override
+  bool get wantKeepAlive => true; // Manter o estado quando mudar de aba
   List<Box> _filteredBoxes = [];
 
   @override
@@ -243,27 +278,11 @@ class _BoxesScreenState extends State<BoxesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Chamada necessária para AutomaticKeepAliveClientMixin
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Minhas Caixas'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.qr_code_scanner),
-            onPressed: _showBarcodeScanner,
-            tooltip: 'Escanear código de barras',
-          ),
-          IconButton(
-            icon: const Icon(Icons.camera_alt),
-            onPressed: _showBoxIdRecognition,
-            tooltip: 'Reconhecer ID com IA',
-          ),
-          IconButton(
-            icon: const Icon(Icons.print),
-            onPressed: _showPrintLabelsDialog,
-            tooltip: 'Imprimir etiquetas',
-          ),
-        ],
-      ),
+      appBar: null, // Removendo a AppBar duplicada
+      extendBody: true,
+      extendBodyBehindAppBar: true,
       body: Column(
         children: [
           Padding(

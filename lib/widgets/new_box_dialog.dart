@@ -4,7 +4,9 @@ import 'package:boxmagic/services/database_helper.dart';
 import 'package:boxmagic/services/preferences_service.dart';
 
 class NewBoxDialog extends StatefulWidget {
-  const NewBoxDialog({Key? key}) : super(key: key);
+  final Function(Box)? onBoxCreated;
+
+  const NewBoxDialog({Key? key, this.onBoxCreated}) : super(key: key);
 
   @override
   _NewBoxDialogState createState() => _NewBoxDialogState();
@@ -112,6 +114,12 @@ class _NewBoxDialogState extends State<NewBoxDialog> {
 
     try {
       final savedBox = await _databaseHelper.createBox(newBox);
+
+      // Chamar o callback se existir
+      if (widget.onBoxCreated != null) {
+        widget.onBoxCreated!(savedBox);
+      }
+
       if (mounted) {
         // Show success message
         ScaffoldMessenger.of(context).showSnackBar(

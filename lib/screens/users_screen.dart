@@ -147,17 +147,9 @@ class _UsersScreenState extends State<UsersScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Usuários'),
-        actions: [
-          // Reset button (for testing purposes)
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _resetAllData,
-            tooltip: 'Resetar todos os dados',
-          ),
-        ],
-      ),
+      appBar: null, // Removendo a AppBar duplicada
+      extendBody: true,
+      extendBodyBehindAppBar: true,
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _users.isEmpty
