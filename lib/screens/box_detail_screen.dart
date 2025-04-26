@@ -5,6 +5,7 @@ import 'package:boxmagic/services/database_helper.dart';
 import 'package:boxmagic/widgets/new_item_dialog.dart';
 import 'package:boxmagic/widgets/edit_box_dialog.dart';
 import 'package:boxmagic/screens/item_detail_screen.dart';
+import 'package:boxmagic/screens/object_recognition_screen.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 class BoxDetailScreen extends StatefulWidget {
@@ -64,8 +65,6 @@ class _BoxDetailScreenState extends State<BoxDetailScreen> {
   }
 
   Future<void> _showNewItemDialog() async {
-    print('Abrindo diálogo para adicionar item à caixa: ${_box.id}');
-
     // Verificar se o ID da caixa é válido
     if (_box.id == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -86,10 +85,33 @@ class _BoxDetailScreenState extends State<BoxDetailScreen> {
     );
 
     if (result != null) {
-      print('Item criado com sucesso: ${result.name}, ID: ${result.id}');
       await _loadItems();
-    } else {
-      print('Diálogo fechado sem criar item');
+    }
+  }
+
+  Future<void> _showObjectRecognition() async {
+    // Verificar se o ID da caixa é válido
+    if (_box.id == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Erro: ID da caixa é nulo')),
+      );
+      return;
+    }
+
+    // Criar uma lista com apenas esta caixa
+    final boxesList = [_box];
+
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ObjectRecognitionScreen(
+          boxes: boxesList,
+        ),
+      ),
+    );
+
+    if (result != null) {
+      await _loadItems();
     }
   }
 
@@ -256,8 +278,8 @@ class _BoxDetailScreenState extends State<BoxDetailScreen> {
           // Items list header
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   'Objetos (${_items.length})',
@@ -266,10 +288,33 @@ class _BoxDetailScreenState extends State<BoxDetailScreen> {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                ElevatedButton.icon(
-                  onPressed: _showNewItemDialog,
-                  icon: const Icon(Icons.add),
-                  label: const Text('Adicionar'),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: _showObjectRecognition,
+                        icon: const Icon(Icons.camera_alt, size: 18),
+                        label: const Text('Identificar'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: _showNewItemDialog,
+                        icon: const Icon(Icons.add, size: 18),
+                        label: const Text('Adicionar'),
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -298,9 +343,29 @@ class _BoxDetailScreenState extends State<BoxDetailScreen> {
                               ),
                             ),
                             const SizedBox(height: 8),
-                            ElevatedButton(
-                              onPressed: _showNewItemDialog,
-                              child: const Text('Adicionar objeto'),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                ElevatedButton.icon(
+                                  onPressed: _showObjectRecognition,
+                                  icon: const Icon(Icons.camera_alt),
+                                  label: const Text('Identificar com câmera'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.green,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                ElevatedButton.icon(
+                                  onPressed: _showNewItemDialog,
+                                  icon: const Icon(Icons.add),
+                                  label: const Text('Adicionar manualmente'),
+                                  style: ElevatedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
@@ -345,11 +410,24 @@ class _BoxDetailScreenState extends State<BoxDetailScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showNewItemDialog,
-        tooltip: 'Adicionar novo objeto',
-        heroTag: 'box_detail_fab',
-        child: const Icon(Icons.add),
+      floatingActionButton: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          FloatingActionButton(
+            onPressed: _showObjectRecognition,
+            tooltip: 'Identificar objeto com câmera',
+            heroTag: 'box_detail_camera_fab',
+            backgroundColor: Colors.green,
+            child: const Icon(Icons.camera_enhance),
+          ),
+          const SizedBox(width: 16),
+          FloatingActionButton(
+            onPressed: _showNewItemDialog,
+            tooltip: 'Adicionar novo objeto',
+            heroTag: 'box_detail_add_fab',
+            child: const Icon(Icons.add),
+          ),
+        ],
       ),
     );
   }
