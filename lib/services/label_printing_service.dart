@@ -165,7 +165,7 @@ class LabelPrintingService {
     int labelsPerRow,
   ) {
     final index = startIndex + row * labelsPerRow + col;
-    
+
     // Se não houver mais caixas, retornar um container vazio
     if (index >= boxes.length) {
       return pw.Container(
@@ -252,7 +252,6 @@ class LabelPrintingService {
             'Descrição: ${box.description}',
             style: const pw.TextStyle(fontSize: 8),
             maxLines: 2,
-            overflow: pw.TextOverflow.ellipsis,
           ),
         pw.Expanded(
           child: pw.Center(
@@ -358,39 +357,37 @@ class LabelPrintingService {
   // Gerar QR code para uma caixa
   Future<Uint8List> _generateQrCode(String data) async {
     try {
-      final qrValidationResult = QrValidator.validate(
+      // Usar uma abordagem mais simples para gerar o QR code
+      final qrCode = QrPainter(
         data: data,
         version: QrVersions.auto,
         errorCorrectionLevel: QrErrorCorrectLevel.L,
+        eyeStyle: const QrEyeStyle(
+          eyeShape: QrEyeShape.square,
+          color: Colors.black,
+        ),
+        dataModuleStyle: const QrDataModuleStyle(
+          dataModuleShape: QrDataModuleShape.square,
+          color: Colors.black,
+        ),
+        // Desenhar em um fundo branco
+        gapless: false,
       );
 
-      if (qrValidationResult.status == QrValidationStatus.valid) {
-        final qrCode = qrValidationResult.qrCode!;
-        
-        final qrImage = QrImageView(
-          data: data,
-          version: QrVersions.auto,
-          size: 200.0,
-          backgroundColor: Colors.white,
-        );
-        
-        final painter = qrImage.qrPainter;
-        
-        final ui.PictureRecorder recorder = ui.PictureRecorder();
-        final Canvas canvas = Canvas(recorder);
-        
-        painter.paint(canvas, Size(200, 200));
-        final ui.Picture picture = recorder.endRecording();
-        final ui.Image image = await picture.toImage(200, 200);
-        final ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-        
-        if (byteData != null) {
-          return byteData.buffer.asUint8List();
-        } else {
-          throw Exception('Falha ao converter QR code para imagem');
-        }
+      final ui.PictureRecorder recorder = ui.PictureRecorder();
+      final Canvas canvas = Canvas(recorder);
+
+      // Desenhar o QR code em um canvas
+      qrCode.paint(canvas, Size(200, 200));
+
+      final ui.Picture picture = recorder.endRecording();
+      final ui.Image image = await picture.toImage(200, 200);
+      final ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+
+      if (byteData != null) {
+        return byteData.buffer.asUint8List();
       } else {
-        throw Exception('Dados inválidos para QR code');
+        throw Exception('Falha ao converter QR code para imagem');
       }
     } catch (e) {
       _logService.error('Erro ao gerar QR code', error: e, category: 'printing');
@@ -407,19 +404,19 @@ class LabelPrintingService {
   }) async {
     try {
       _logService.info('Iniciando impressão de etiquetas', category: 'printing');
-      
+
       final pdfData = await generateLabelsPdf(
         boxes: boxes,
         boxItems: boxItems,
         format: format,
         paperType: paperType,
       );
-      
+
       await Printing.layoutPdf(
         onLayout: (PdfPageFormat format) async => pdfData,
         name: 'BoxMagic - Etiquetas',
       );
-      
+
       _logService.info('Impressão de etiquetas concluída', category: 'printing');
     } catch (e) {
       _logService.error('Erro ao imprimir etiquetas', error: e, category: 'printing');
