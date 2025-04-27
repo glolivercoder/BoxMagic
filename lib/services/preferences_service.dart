@@ -73,9 +73,19 @@ class PreferencesService {
   // Increment and get next box ID
   Future<int> incrementAndGetNextBoxId() async {
     final currentId = await getNextBoxId();
-    final nextId = currentId + 1;
+
+    // Garantir que o ID tenha no máximo 4 dígitos
+    int idToUse = currentId;
+    if (idToUse > 9999) {
+      // Se passar de 9999, volta para 1001
+      idToUse = 1001;
+    }
+
+    // Incrementar para o próximo ID
+    final nextId = idToUse + 1;
     await saveNextBoxId(nextId);
-    return currentId;
+
+    return idToUse;
   }
 
   // Get theme (light or dark)

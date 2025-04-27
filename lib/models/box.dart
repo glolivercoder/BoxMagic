@@ -23,8 +23,21 @@ class Box {
     this.barcodeDataUrl,
   });
 
-  // Retorna o ID formatado como uma string de 4 dígitos
-  String get formattedId => id != null ? id.toString().padLeft(4, '0') : '0000';
+  // Retorna o ID formatado como uma string de exatamente 4 dígitos
+  String get formattedId {
+    if (id == null) return '0000';
+
+    // Converter para string
+    String idStr = id.toString();
+
+    // Se for maior que 4 dígitos, pegar apenas os últimos 4
+    if (idStr.length > 4) {
+      return idStr.substring(idStr.length - 4);
+    }
+
+    // Se for menor que 4 dígitos, preencher com zeros à esquerda
+    return idStr.padLeft(4, '0');
+  }
 
   Map<String, dynamic> toMap() {
     return {
