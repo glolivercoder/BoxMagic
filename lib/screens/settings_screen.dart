@@ -6,6 +6,7 @@ import 'package:boxmagic/services/database_helper.dart';
 import 'package:boxmagic/services/persistence_service.dart';
 import 'package:boxmagic/services/preferences_service.dart';
 import 'package:boxmagic/services/log_service.dart';
+import 'package:boxmagic/services/gemini_service.dart';
 import 'package:boxmagic/screens/logs_screen.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -23,6 +24,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final PersistenceService _persistenceService = PersistenceService();
   final PreferencesService _preferencesService = PreferencesService();
   final LogService _logService = LogService();
+  final GeminiService _geminiService = GeminiService();
 
   bool _isDarkMode = false;
   String _labelSize = 'correios';
@@ -32,6 +34,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   int _logCount = 0;
   bool _isLoggingEnabled = true;
 
+  // Variáveis para a API Gemini
+  String _geminiApiKey = '';
+  final TextEditingController _apiKeyController = TextEditingController();
+  bool _isApiKeyVisible = false;
+
   @override
   void initState() {
     super.initState();
@@ -40,6 +47,78 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _loadLoggingState();
     _countLogs();
     _loadBackupDirectoryPath();
+    _loadGeminiApiKey();
+  }
+
+  @override
+  void dispose() {
+    _apiKeyController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadGeminiApiKey() async {
+    try {
+      final apiKey = await _geminiService.getApiKey();
+      setState(() {
+        _geminiApiKey = apiKey;
+        _apiKeyController.text = apiKey;
+      });
+    } catch (e) {
+      _logService.error('Erro ao carregar chave da API Gemini', error: e, category: 'settings');
+    }
+  }
+
+  Future<void> _saveGeminiApiKey() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final apiKey = _apiKeyController.text.trim();
+      final success = await _geminiService.updateApiKey(apiKey);
+
+      if (success) {
+        setState(() {
+          _geminiApiKey = apiKey;
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Chave da API Gemini atualizada com sucesso'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Erro ao atualizar chave da API Gemini'),
+              backgroundColor: Colors.red,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      _logService.error('Erro ao salvar chave da API Gemini', error: e, category: 'settings');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro ao salvar chave da API: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 
   Future<void> _loadBackupDirectoryPath() async {
@@ -682,6 +761,55 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       foregroundColor: Colors.white,
                       minimumSize: const Size(double.infinity, 50),
                     ),
+                  ),
+                ),
+
+                // Seção de API Gemini
+                const _SectionHeader(title: 'API Gemini'),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Configure a chave da API Gemini para reconhecimento de imagens e análise de objetos.',
+                        style: TextStyle(fontSize: 14),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _apiKeyController,
+                        decoration: InputDecoration(
+                          labelText: 'Chave da API Gemini',
+                          hintText: 'Insira sua chave da API Gemini',
+                          border: const OutlineInputBorder(),
+                          suffixIcon: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: Icon(
+                                  _isApiKeyVisible ? Icons.visibility_off : Icons.visibility,
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    _isApiKeyVisible = !_isApiKeyVisible;
+                                  });
+                                },
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.save),
+                                onPressed: _saveGeminiApiKey,
+                              ),
+                            ],
+                          ),
+                        ),
+                        obscureText: !_isApiKeyVisible,
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'A chave padrão é compartilhada e pode ter limitações. Para melhor desempenho, use sua própria chave.',
+                        style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic),
+                      ),
+                    ],
                   ),
                 ),
 
