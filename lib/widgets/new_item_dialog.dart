@@ -1,17 +1,25 @@
 import 'package:flutter/material.dart';
+import 'dart:io';
+import 'dart:convert';
 import 'package:boxmagic/models/item.dart';
 import 'package:boxmagic/models/box.dart';
 import 'package:boxmagic/services/database_helper.dart';
 import 'package:boxmagic/services/preferences_service.dart';
+import 'package:boxmagic/services/persistence_service.dart';
+import 'package:boxmagic/services/log_service.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class NewItemDialog extends StatefulWidget {
   final List<Box>? boxes;
   final int? preselectedBoxId;
+  final Item? editItem; // Item para edição (null para novo item)
 
   const NewItemDialog({
     Key? key,
     this.boxes,
     this.preselectedBoxId,
+    this.editItem,
   }) : super(key: key);
 
   @override
@@ -26,14 +34,39 @@ class _NewItemDialogState extends State<NewItemDialog> {
   int? _selectedBoxId;
   final _databaseHelper = DatabaseHelper.instance;
   final _preferencesService = PreferencesService();
+  final _persistenceService = PersistenceService();
+  final _logService = LogService();
+  final _imagePicker = ImagePicker();
   List<String> _categories = [];
   List<Box> _boxes = [];
   bool _isLoading = true;
 
+  // Variáveis para gerenciar imagens
+  XFile? _imageFile;
+  String? _base64Image;
+  bool _hasImage = false;
+
   @override
   void initState() {
     super.initState();
-    _selectedBoxId = widget.preselectedBoxId;
+
+    // Verificar se estamos editando um item existente
+    if (widget.editItem != null) {
+      _nameController.text = widget.editItem!.name;
+      _descriptionController.text = widget.editItem!.description ?? '';
+      _selectedCategory = widget.editItem!.category;
+      _selectedBoxId = widget.editItem!.boxId;
+
+      // Verificar se o item tem imagem
+      if (widget.editItem!.image != null && widget.editItem!.image!.isNotEmpty) {
+        _base64Image = widget.editItem!.image;
+        _hasImage = true;
+      }
+    } else {
+      // Caso de novo item
+      _selectedBoxId = widget.preselectedBoxId;
+    }
+
     _loadData();
   }
 
@@ -43,13 +76,53 @@ class _NewItemDialogState extends State<NewItemDialog> {
     });
 
     try {
+      _logService.info('Iniciando carregamento de dados para o diálogo de novo item', category: 'new_item_dialog');
+
       final categories = await _preferencesService.getCategories();
+      _logService.debug('Categorias carregadas: ${categories.length}', category: 'new_item_dialog');
+
       List<Box> boxes;
 
       if (widget.boxes != null) {
         boxes = widget.boxes!;
+        _logService.debug('Usando caixas fornecidas externamente: ${boxes.length}', category: 'new_item_dialog');
+
+        // Log detalhado das caixas
+        for (int i = 0; i < boxes.length; i++) {
+          _logService.debug('Caixa $i: ID=${boxes[i].id}, Nome=${boxes[i].name}', category: 'new_item_dialog');
+        }
       } else {
+        _logService.debug('Carregando caixas do banco de dados', category: 'new_item_dialog');
         boxes = await _databaseHelper.readAllBoxes();
+        _logService.debug('Caixas carregadas do banco de dados: ${boxes.length}', category: 'new_item_dialog');
+
+        // Log detalhado das caixas
+        for (int i = 0; i < boxes.length; i++) {
+          _logService.debug('Caixa $i: ID=${boxes[i].id}, Nome=${boxes[i].name}', category: 'new_item_dialog');
+        }
+
+        // Se não houver caixas, tentar carregar diretamente do serviço de persistência
+        if (boxes.isEmpty) {
+          _logService.warning('Nenhuma caixa encontrada no DatabaseHelper, tentando carregar do serviço de persistência', category: 'new_item_dialog');
+
+          // Usar a instância de PersistenceService que já criamos
+          final data = await _persistenceService.loadAllData();
+          final persistedBoxes = data['boxes'] as List<Box>;
+
+          _logService.debug('Caixas carregadas do serviço de persistência: ${persistedBoxes.length}', category: 'new_item_dialog');
+
+          if (persistedBoxes.isNotEmpty) {
+            // Atualizar o DatabaseHelper com as caixas persistidas
+            for (final box in persistedBoxes) {
+              await _databaseHelper.createBox(box);
+              _logService.debug('Caixa adicionada ao DatabaseHelper: ID=${box.id}, Nome=${box.name}', category: 'new_item_dialog');
+            }
+
+            // Recarregar as caixas
+            boxes = await _databaseHelper.readAllBoxes();
+            _logService.debug('Caixas recarregadas após atualização: ${boxes.length}', category: 'new_item_dialog');
+          }
+        }
       }
 
       setState(() {
@@ -57,13 +130,25 @@ class _NewItemDialogState extends State<NewItemDialog> {
         _boxes = boxes;
         _isLoading = false;
       });
-    } catch (e) {
+
+      _logService.info('Dados carregados com sucesso para o diálogo de novo item', category: 'new_item_dialog');
+    } catch (e, stackTrace) {
+      _logService.error(
+        'Erro ao carregar dados para o diálogo de novo item',
+        error: e,
+        stackTrace: stackTrace,
+        category: 'new_item_dialog',
+      );
+
       setState(() {
         _isLoading = false;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro ao carregar dados: $e')),
-      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao carregar dados: $e')),
+        );
+      }
     }
   }
 
@@ -77,9 +162,11 @@ class _NewItemDialogState extends State<NewItemDialog> {
         _selectedCategory = category;
       });
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro ao adicionar categoria: $e')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao adicionar categoria: $e')),
+        );
+      }
     }
   }
 
@@ -128,37 +215,89 @@ class _NewItemDialogState extends State<NewItemDialog> {
       return;
     }
 
-    // Mostrar informações de debug
-    print('Criando item:');
-    print('Nome: ${_nameController.text}');
-    print('Categoria: $_selectedCategory');
-    print('Descrição: ${_descriptionController.text}');
-    print('ID da Caixa: $_selectedBoxId');
-
-    final newItem = Item(
-      name: _nameController.text,
-      category: _selectedCategory,
-      description: _descriptionController.text.isEmpty ? null : _descriptionController.text,
-      boxId: _selectedBoxId!,
-      createdAt: now,
-    );
-
     try {
-      final savedItem = await _databaseHelper.createItem(newItem);
-      if (mounted) {
-        // Mostrar mensagem de sucesso
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Objeto criado com sucesso!'),
-            backgroundColor: Colors.green,
-          ),
+      Item? savedItem;
+
+      if (widget.editItem != null) {
+        // Modo de edição - atualizar item existente
+        _logService.info('Atualizando item existente: ${widget.editItem!.id}', category: 'new_item_dialog');
+        _logService.debug('Nome: ${_nameController.text}', category: 'new_item_dialog');
+        _logService.debug('Categoria: $_selectedCategory', category: 'new_item_dialog');
+        _logService.debug('Descrição: ${_descriptionController.text}', category: 'new_item_dialog');
+        _logService.debug('ID da Caixa: $_selectedBoxId', category: 'new_item_dialog');
+        _logService.debug('Tem imagem: $_hasImage', category: 'new_item_dialog');
+
+        final updatedItem = Item(
+          id: widget.editItem!.id,
+          name: _nameController.text,
+          category: _selectedCategory,
+          description: _descriptionController.text.isEmpty ? null : _descriptionController.text,
+          image: _base64Image, // Incluir a imagem em base64
+          boxId: _selectedBoxId!,
+          createdAt: widget.editItem!.createdAt,
+          updatedAt: now,
         );
+
+        // Atualizar o item no banco de dados
+        final result = await _databaseHelper.updateItem(updatedItem);
+
+        if (result > 0) {
+          savedItem = updatedItem;
+          if (mounted) {
+            // Mostrar mensagem de sucesso
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Objeto atualizado com sucesso!'),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        } else {
+          throw Exception('Falha ao atualizar o objeto');
+        }
+      } else {
+        // Modo de criação - criar novo item
+        _logService.info('Criando novo item', category: 'new_item_dialog');
+        _logService.debug('Nome: ${_nameController.text}', category: 'new_item_dialog');
+        _logService.debug('Categoria: $_selectedCategory', category: 'new_item_dialog');
+        _logService.debug('Descrição: ${_descriptionController.text}', category: 'new_item_dialog');
+        _logService.debug('ID da Caixa: $_selectedBoxId', category: 'new_item_dialog');
+        _logService.debug('Tem imagem: $_hasImage', category: 'new_item_dialog');
+
+        final newItem = Item(
+          name: _nameController.text,
+          category: _selectedCategory,
+          description: _descriptionController.text.isEmpty ? null : _descriptionController.text,
+          image: _base64Image, // Incluir a imagem em base64
+          boxId: _selectedBoxId!,
+          createdAt: now,
+        );
+
+        // Criar o item no banco de dados
+        savedItem = await _databaseHelper.createItem(newItem);
+
+        if (mounted) {
+          // Mostrar mensagem de sucesso
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Objeto criado com sucesso!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      }
+
+      if (mounted) {
         Navigator.pop(context, savedItem);
       }
     } catch (e, stackTrace) {
-      // Mostrar mais informações sobre o erro
-      print('Erro ao salvar objeto: $e');
-      print('Stack trace: $stackTrace');
+      // Registrar o erro
+      _logService.error(
+        'Erro ao salvar objeto',
+        error: e,
+        stackTrace: stackTrace,
+        category: 'new_item_dialog',
+      );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -174,7 +313,29 @@ class _NewItemDialogState extends State<NewItemDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Novo Objeto'),
+      title: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(widget.editItem != null ? 'Editar Objeto' : 'Novo Objeto'),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Botão de câmera
+              IconButton(
+                icon: const Icon(Icons.camera_alt),
+                tooltip: 'Tirar foto',
+                onPressed: _takePicture,
+              ),
+              // Botão de galeria
+              IconButton(
+                icon: const Icon(Icons.photo_library),
+                tooltip: 'Escolher da galeria',
+                onPressed: _pickImage,
+              ),
+            ],
+          ),
+        ],
+      ),
       content: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : Form(
@@ -183,6 +344,39 @@ class _NewItemDialogState extends State<NewItemDialog> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    // Visualização da imagem (se houver)
+                    if (_hasImage)
+                      Stack(
+                        alignment: Alignment.topRight,
+                        children: [
+                          Container(
+                            height: 150,
+                            width: double.infinity,
+                            margin: const EdgeInsets.only(bottom: 16),
+                            decoration: BoxDecoration(
+                              border: Border.all(color: Colors.grey),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: kIsWeb
+                                  ? Image.memory(
+                                      base64Decode(_base64Image!),
+                                      fit: BoxFit.cover,
+                                    )
+                                  : Image.file(
+                                      File(_imageFile!.path),
+                                      fit: BoxFit.cover,
+                                    ),
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close, color: Colors.red),
+                            onPressed: _removeImage,
+                          ),
+                        ],
+                      ),
+
                     TextFormField(
                       controller: _nameController,
                       decoration: const InputDecoration(
@@ -266,10 +460,121 @@ class _NewItemDialogState extends State<NewItemDialog> {
         ),
         ElevatedButton(
           onPressed: _isLoading ? null : _saveItem,
-          child: const Text('Salvar'),
+          child: Text(widget.editItem != null ? 'Atualizar' : 'Salvar'),
         ),
       ],
     );
+  }
+
+  // Método para capturar imagem da câmera
+  Future<void> _takePicture() async {
+    _logService.info('Iniciando captura de imagem da câmera', category: 'new_item_dialog');
+
+    try {
+      final XFile? image = await _imagePicker.pickImage(
+        source: ImageSource.camera,
+        maxWidth: 800,
+        maxHeight: 800,
+        imageQuality: 85,
+      );
+
+      if (image != null) {
+        _processImage(image);
+      } else {
+        _logService.info('Captura de imagem cancelada pelo usuário', category: 'new_item_dialog');
+      }
+    } catch (e, stackTrace) {
+      _logService.error(
+        'Erro ao capturar imagem da câmera',
+        error: e,
+        stackTrace: stackTrace,
+        category: 'new_item_dialog',
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao capturar imagem: $e')),
+        );
+      }
+    }
+  }
+
+  // Método para selecionar imagem da galeria
+  Future<void> _pickImage() async {
+    _logService.info('Iniciando seleção de imagem da galeria', category: 'new_item_dialog');
+
+    try {
+      final XFile? image = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 800,
+        maxHeight: 800,
+        imageQuality: 85,
+      );
+
+      if (image != null) {
+        _processImage(image);
+      } else {
+        _logService.info('Seleção de imagem cancelada pelo usuário', category: 'new_item_dialog');
+      }
+    } catch (e, stackTrace) {
+      _logService.error(
+        'Erro ao selecionar imagem da galeria',
+        error: e,
+        stackTrace: stackTrace,
+        category: 'new_item_dialog',
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao selecionar imagem: $e')),
+        );
+      }
+    }
+  }
+
+  // Método para processar a imagem selecionada
+  Future<void> _processImage(XFile image) async {
+    _logService.info('Processando imagem: ${image.path}', category: 'new_item_dialog');
+
+    try {
+      // Ler a imagem como bytes
+      final bytes = await image.readAsBytes();
+
+      // Converter para base64
+      final base64Image = base64Encode(bytes);
+
+      setState(() {
+        _imageFile = image;
+        _base64Image = base64Image;
+        _hasImage = true;
+      });
+
+      _logService.info('Imagem processada com sucesso', category: 'new_item_dialog');
+    } catch (e, stackTrace) {
+      _logService.error(
+        'Erro ao processar imagem',
+        error: e,
+        stackTrace: stackTrace,
+        category: 'new_item_dialog',
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao processar imagem: $e')),
+        );
+      }
+    }
+  }
+
+  // Método para remover a imagem
+  void _removeImage() {
+    _logService.info('Removendo imagem', category: 'new_item_dialog');
+
+    setState(() {
+      _imageFile = null;
+      _base64Image = null;
+      _hasImage = false;
+    });
   }
 
   @override
