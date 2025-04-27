@@ -2,16 +2,14 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:boxmagic/models/box.dart';
-import 'package:boxmagic/models/item.dart';
-import 'package:boxmagic/models/user.dart';
 import 'package:boxmagic/services/database_helper.dart';
 import 'package:boxmagic/services/persistence_service.dart';
 import 'package:boxmagic/services/preferences_service.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
+import 'package:boxmagic/services/log_service.dart';
+import 'package:boxmagic/screens/logs_screen.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:universal_html/html.dart' as html;
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({Key? key}) : super(key: key);
@@ -24,32 +22,65 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final DatabaseHelper _databaseHelper = DatabaseHelper.instance;
   final PersistenceService _persistenceService = PersistenceService();
   final PreferencesService _preferencesService = PreferencesService();
-  
+  final LogService _logService = LogService();
+
   bool _isDarkMode = false;
   String _labelSize = 'correios';
   bool _isLoading = false;
   String _lastBackupDate = 'Nunca';
-  
+  String _backupDirectoryPath = 'Carregando...';
+  int _logCount = 0;
+  bool _isLoggingEnabled = true;
+
   @override
   void initState() {
     super.initState();
     _loadSettings();
     _checkLastBackup();
+    _loadLoggingState();
+    _countLogs();
+    _loadBackupDirectoryPath();
   }
-  
+
+  Future<void> _loadBackupDirectoryPath() async {
+    try {
+      final path = await _persistenceService.getBackupDirectoryPath();
+      setState(() {
+        _backupDirectoryPath = path;
+      });
+    } catch (e) {
+      setState(() {
+        _backupDirectoryPath = 'Erro ao carregar caminho';
+      });
+    }
+  }
+
+  Future<void> _loadLoggingState() async {
+    setState(() {
+      _isLoggingEnabled = _logService.isLoggingEnabled();
+    });
+  }
+
+  Future<void> _countLogs() async {
+    final logs = _logService.getLogs();
+    setState(() {
+      _logCount = logs.length;
+    });
+  }
+
   Future<void> _loadSettings() async {
     final theme = await _preferencesService.getTheme();
     final labelSize = await _preferencesService.getLabelSize();
-    
+
     setState(() {
       _isDarkMode = theme == 'dark';
       _labelSize = labelSize;
     });
   }
-  
+
   Future<void> _checkLastBackup() async {
     final lastBackupTime = await _persistenceService.getLastSyncTime();
-    
+
     setState(() {
       if (lastBackupTime != null) {
         _lastBackupDate = '${lastBackupTime.day}/${lastBackupTime.month}/${lastBackupTime.year} às ${lastBackupTime.hour}:${lastBackupTime.minute.toString().padLeft(2, '0')}';
@@ -58,15 +89,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
     });
   }
-  
+
   Future<void> _toggleTheme() async {
     final newTheme = _isDarkMode ? 'light' : 'dark';
     await _preferencesService.saveTheme(newTheme);
-    
+
     setState(() {
       _isDarkMode = !_isDarkMode;
     });
-    
+
     // Notificar a mudança de tema
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -77,14 +108,57 @@ class _SettingsScreenState extends State<SettingsScreen> {
       );
     }
   }
-  
+
+  // Método para ativar/desativar o logging
+  Future<void> _toggleLogging(bool value) async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final success = await _logService.setLoggingEnabled(value);
+
+      if (success) {
+        setState(() {
+          _isLoggingEnabled = value;
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Logs ${value ? 'ativados' : 'desativados'}'),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Erro ao alterar configuração de logs'),
+              backgroundColor: Colors.red,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      }
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+
+      // Atualizar a contagem de logs
+      _countLogs();
+    }
+  }
+
   Future<void> _changeLabelSize(String size) async {
     await _preferencesService.saveLabelSize(size);
-    
+
     setState(() {
       _labelSize = size;
     });
-    
+
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -94,62 +168,104 @@ class _SettingsScreenState extends State<SettingsScreen> {
       );
     }
   }
-  
+
   Future<void> _createBackup() async {
     setState(() {
       _isLoading = true;
     });
-    
+
     try {
       // Carregar todos os dados
       final boxes = await _databaseHelper.readAllBoxes();
       final items = await _databaseHelper.readAllItems();
       final users = await _databaseHelper.readAllUsers();
-      
-      // Criar objeto de backup
-      final backupData = {
-        'timestamp': DateTime.now().toIso8601String(),
-        'version': '1.0.0',
-        'boxes': boxes.map((box) => box.toMap()).toList(),
-        'items': items.map((item) => item.toMap()).toList(),
-        'users': users.map((user) => user.toMap()).toList(),
-      };
-      
-      // Converter para JSON
-      final backupJson = jsonEncode(backupData);
-      
-      if (kIsWeb) {
-        // No web, copiar para a área de transferência
-        await Clipboard.setData(ClipboardData(text: backupJson));
-        
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Backup copiado para a área de transferência'),
-              duration: Duration(seconds: 3),
-            ),
-          );
+
+      // Usar o serviço de persistência para criar o backup
+      final backupPath = await _persistenceService.createBackupFile(boxes, items, users);
+
+      if (backupPath != null) {
+        if (kIsWeb) {
+          // No web, o backupPath contém o JSON com um prefixo especial
+          if (backupPath.startsWith('BOXMAGIC_BACKUP_JSON:')) {
+            // Extrair o JSON
+            final jsonData = backupPath.substring('BOXMAGIC_BACKUP_JSON:'.length);
+
+            // Criar um arquivo para download
+            final timestamp = DateTime.now().millisecondsSinceEpoch;
+            final fileName = 'boxmagic_backup_$timestamp.json';
+
+            // Criar um blob com o JSON
+            final blob = html.Blob([jsonData], 'application/json');
+
+            // Criar um link para download
+            final url = html.Url.createObjectUrlFromBlob(blob);
+            final anchor = html.AnchorElement(href: url)
+              ..setAttribute('download', fileName)
+              ..style.display = 'none';
+
+            // Adicionar o link ao documento
+            html.document.body?.append(anchor);
+
+            // Clicar no link para iniciar o download
+            anchor.click();
+
+            // Remover o link
+            html.Url.revokeObjectUrl(url);
+            anchor.remove();
+
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Backup salvo como: $fileName'),
+                  duration: const Duration(seconds: 3),
+                ),
+              );
+            }
+          } else {
+            // Fallback para o comportamento anterior
+            await Clipboard.setData(ClipboardData(text: backupPath));
+
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Backup copiado para a área de transferência'),
+                  duration: Duration(seconds: 3),
+                ),
+              );
+            }
+          }
+        } else {
+          // Em dispositivos nativos, mostrar mensagem de sucesso
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Backup salvo em: $backupPath'),
+                duration: const Duration(seconds: 5),
+              ),
+            );
+          }
+
+          // Atualizar o caminho do diretório de backup
+          await _loadBackupDirectoryPath();
         }
+
+        // Registrar no log
+        _logService.info('Backup criado com sucesso', category: 'settings');
       } else {
-        // Em dispositivos móveis, salvar como arquivo
-        final directory = await getApplicationDocumentsDirectory();
-        final fileName = 'boxmagic_backup_${DateTime.now().millisecondsSinceEpoch}.json';
-        final file = File('${directory.path}/$fileName');
-        
-        await file.writeAsString(backupJson);
-        
-        // Compartilhar o arquivo
-        await Share.shareXFiles(
-          [XFile(file.path)],
-          text: 'Backup BoxMagic',
-          subject: 'Backup BoxMagic - ${DateTime.now().toString().substring(0, 10)}',
-        );
+        throw Exception('Falha ao criar arquivo de backup');
       }
-      
+
       // Atualizar data do último backup
       await _checkLastBackup();
-      
-    } catch (e) {
+
+    } catch (e, stackTrace) {
+      _logService.error(
+        'Erro ao criar backup',
+        error: e,
+        stackTrace: stackTrace,
+        category: 'settings',
+      );
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -165,136 +281,203 @@ class _SettingsScreenState extends State<SettingsScreen> {
       });
     }
   }
-  
+
   Future<void> _restoreBackup() async {
-    if (kIsWeb) {
-      // No web, solicitar texto da área de transferência
-      final clipboardData = await Clipboard.getData('text/plain');
-      final backupJson = clipboardData?.text;
-      
-      if (backupJson == null || backupJson.isEmpty) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Nenhum backup encontrado na área de transferência'),
-              backgroundColor: Colors.red,
-              duration: Duration(seconds: 3),
-            ),
-          );
-        }
-        return;
-      }
-      
-      _processBackupData(backupJson);
-    } else {
-      // Em dispositivos móveis, selecionar arquivo
-      try {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      if (kIsWeb) {
+        // No web, permitir que o usuário selecione um arquivo
         final result = await FilePicker.platform.pickFiles(
           type: FileType.custom,
           allowedExtensions: ['json'],
         );
-        
+
         if (result == null || result.files.isEmpty) {
           return;
         }
-        
-        final file = File(result.files.single.path!);
-        final backupJson = await file.readAsString();
-        
-        _processBackupData(backupJson);
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Erro ao restaurar backup: $e'),
-              backgroundColor: Colors.red,
-              duration: const Duration(seconds: 5),
-            ),
-          );
+
+        // Ler o conteúdo do arquivo
+        final file = result.files.first;
+        final backupJson = file.bytes != null
+            ? utf8.decode(file.bytes!)
+            : null;
+
+        if (backupJson == null || backupJson.isEmpty) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Não foi possível ler o arquivo de backup'),
+                backgroundColor: Colors.red,
+                duration: Duration(seconds: 3),
+              ),
+            );
+          }
+          return;
         }
-      }
-    }
-  }
-  
-  Future<void> _processBackupData(String backupJson) async {
-    setState(() {
-      _isLoading = true;
-    });
-    
-    try {
-      // Decodificar JSON
-      final backupData = jsonDecode(backupJson) as Map<String, dynamic>;
-      
-      // Verificar versão
-      final version = backupData['version'];
-      if (version != '1.0.0') {
-        throw Exception('Versão de backup incompatível: $version');
-      }
-      
-      // Confirmar restauração
-      final confirm = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Restaurar backup'),
-          content: const Text(
-            'Esta ação substituirá todos os dados atuais. Deseja continuar?',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancelar'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Restaurar'),
-            ),
-          ],
-        ),
-      );
-      
-      if (confirm != true) {
-        return;
-      }
-      
-      // Limpar dados atuais
-      await _databaseHelper.clearAllData();
-      
-      // Restaurar caixas
-      final boxesData = backupData['boxes'] as List;
-      for (final boxData in boxesData) {
-        final box = Box.fromMap(boxData as Map<String, dynamic>);
-        await _databaseHelper.createBox(box);
-      }
-      
-      // Restaurar itens
-      final itemsData = backupData['items'] as List;
-      for (final itemData in itemsData) {
-        final item = Item.fromMap(itemData as Map<String, dynamic>);
-        await _databaseHelper.createItem(item);
-      }
-      
-      // Restaurar usuários
-      final usersData = backupData['users'] as List;
-      for (final userData in usersData) {
-        final user = User.fromMap(userData as Map<String, dynamic>);
-        await _databaseHelper.createUser(user);
-      }
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Backup restaurado com sucesso!'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 3),
+
+        // Usar o serviço de persistência para restaurar o backup
+        final success = await _persistenceService.restoreFromBackupJson(backupJson);
+
+        if (success) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Backup restaurado com sucesso!'),
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 3),
+              ),
+            );
+          }
+          _logService.info('Backup restaurado com sucesso do arquivo', category: 'settings');
+        } else {
+          throw Exception('Falha ao restaurar backup');
+        }
+      } else {
+        // Em dispositivos móveis, mostrar opções: selecionar arquivo ou usar backup local
+        final choice = await showDialog<String>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Restaurar Backup'),
+            content: const Text('De onde você deseja restaurar o backup?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, 'file'),
+                child: const Text('Selecionar arquivo'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, 'local'),
+                child: const Text('Usar backup local'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancelar'),
+              ),
+            ],
           ),
         );
+
+        if (choice == null) {
+          return;
+        }
+
+        if (choice == 'file') {
+          // Selecionar arquivo
+          final result = await FilePicker.platform.pickFiles(
+            type: FileType.custom,
+            allowedExtensions: ['json'],
+          );
+
+          if (result == null || result.files.isEmpty) {
+            return;
+          }
+
+          final filePath = result.files.single.path!;
+
+          // Usar o serviço de persistência para restaurar o backup
+          final success = await _persistenceService.restoreFromBackupFile(filePath);
+
+          if (success) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Backup restaurado com sucesso!'),
+                  backgroundColor: Colors.green,
+                  duration: Duration(seconds: 3),
+                ),
+              );
+            }
+            _logService.info('Backup restaurado com sucesso do arquivo: $filePath', category: 'settings');
+          } else {
+            throw Exception('Falha ao restaurar backup do arquivo');
+          }
+        } else if (choice == 'local') {
+          // Mostrar lista de backups locais
+          final backups = await _persistenceService.listBackups();
+
+          if (backups.isEmpty) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Nenhum backup local encontrado'),
+                  backgroundColor: Colors.orange,
+                  duration: Duration(seconds: 3),
+                ),
+              );
+            }
+            return;
+          }
+
+          // Mostrar diálogo para selecionar backup
+          final selectedBackup = await showDialog<Map<String, dynamic>>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Selecionar Backup'),
+              content: SizedBox(
+                width: double.maxFinite,
+                height: 300,
+                child: ListView.builder(
+                  itemCount: backups.length,
+                  itemBuilder: (context, index) {
+                    final backup = backups[index];
+                    final timestamp = DateTime.parse(backup['timestamp'] as String);
+                    final formattedDate = '${timestamp.day}/${timestamp.month}/${timestamp.year} ${timestamp.hour}:${timestamp.minute.toString().padLeft(2, '0')}';
+
+                    return ListTile(
+                      title: Text('Backup de $formattedDate'),
+                      subtitle: Text('Caixas: ${backup['boxes']}, Objetos: ${backup['items']}'),
+                      onTap: () => Navigator.pop(context, backup),
+                    );
+                  },
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancelar'),
+                ),
+              ],
+            ),
+          );
+
+          if (selectedBackup == null) {
+            return;
+          }
+
+          // Restaurar o backup selecionado
+          final filePath = selectedBackup['path'] as String;
+          final success = await _persistenceService.restoreFromBackupFile(filePath);
+
+          if (success) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Backup restaurado com sucesso!'),
+                  backgroundColor: Colors.green,
+                  duration: Duration(seconds: 3),
+                ),
+              );
+            }
+            _logService.info('Backup restaurado com sucesso do arquivo local: $filePath', category: 'settings');
+          } else {
+            throw Exception('Falha ao restaurar backup local');
+          }
+        }
       }
-      
-    } catch (e) {
+    } catch (e, stackTrace) {
+      _logService.error(
+        'Erro ao restaurar backup',
+        error: e,
+        stackTrace: stackTrace,
+        category: 'settings',
+      );
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erro ao processar backup: $e'),
+            content: Text('Erro ao restaurar backup: $e'),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 5),
           ),
@@ -306,7 +489,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       });
     }
   }
-  
+
+
+
   Future<void> _clearAllData() async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -331,18 +516,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
       ),
     );
-    
+
     if (confirm != true) {
       return;
     }
-    
+
     setState(() {
       _isLoading = true;
     });
-    
+
     try {
       await _databaseHelper.clearAllData();
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -392,7 +577,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     color: _isDarkMode ? Colors.amber : Colors.blueGrey,
                   ),
                 ),
-                
+
                 // Seção de etiquetas
                 const _SectionHeader(title: 'Etiquetas'),
                 RadioListTile<String>(
@@ -416,13 +601,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   groupValue: _labelSize,
                   onChanged: (value) => _changeLabelSize(value!),
                 ),
-                
+
                 // Seção de backup
                 const _SectionHeader(title: 'Backup e Restauração'),
                 ListTile(
                   title: const Text('Último backup'),
                   subtitle: Text(_lastBackupDate),
                   leading: const Icon(Icons.history),
+                ),
+                ListTile(
+                  title: const Text('Diretório de backup'),
+                  subtitle: Text(_backupDirectoryPath),
+                  leading: const Icon(Icons.folder),
+                  isThreeLine: true,
                 ),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
@@ -446,7 +637,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ),
                 ),
-                
+
+                // Seção de logs
+                const _SectionHeader(title: 'Logs do Sistema'),
+                SwitchListTile(
+                  title: const Text('Ativar logs'),
+                  subtitle: Text(_isLoggingEnabled
+                    ? 'Ativado - $_logCount logs armazenados'
+                    : 'Desativado - Os logs podem ajudar a diagnosticar problemas'),
+                  value: _isLoggingEnabled,
+                  onChanged: _toggleLogging,
+                  secondary: Icon(
+                    Icons.bug_report,
+                    color: _isLoggingEnabled ? Colors.green : Colors.grey,
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const LogsScreen()),
+                      ).then((_) => _countLogs());
+                    },
+                    icon: const Icon(Icons.list_alt),
+                    label: const Text('Visualizar logs'),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(double.infinity, 50),
+                    ),
+                  ),
+                ),
+
                 // Seção de dados
                 const _SectionHeader(title: 'Dados'),
                 Padding(
@@ -462,7 +684,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ),
                 ),
-                
+
                 // Sobre o aplicativo
                 const _SectionHeader(title: 'Sobre'),
                 const ListTile(
@@ -478,12 +700,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
 class _SectionHeader extends StatelessWidget {
   final String title;
-  
+
   const _SectionHeader({
     Key? key,
     required this.title,
   }) : super(key: key);
-  
+
   @override
   Widget build(BuildContext context) {
     return Padding(

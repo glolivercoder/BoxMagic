@@ -3,6 +3,8 @@ import 'package:boxmagic/screens/boxes_screen.dart';
 import 'package:boxmagic/screens/items_screen.dart';
 import 'package:boxmagic/screens/users_screen.dart';
 import 'package:boxmagic/screens/settings_screen.dart';
+import 'package:boxmagic/screens/logs_screen.dart';
+import 'package:boxmagic/services/log_service.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({Key? key}) : super(key: key);
@@ -13,12 +15,24 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
+  final LogService _logService = LogService();
 
   final List<Widget> _screens = [
     const BoxesScreen(),
     const ItemsScreen(),
     const UsersScreen(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeLogService();
+  }
+
+  Future<void> _initializeLogService() async {
+    await _logService.initialize();
+    _logService.info('Aplicativo iniciado', category: 'app');
+  }
 
   // Métodos para ações da barra de ferramentas
   void _showBarcodeScanner() {
@@ -32,6 +46,7 @@ class _MainScreenState extends State<MainScreen> {
   void _showBoxIdRecognition() {
     if (_selectedIndex == 0) {
       // Implementar reconhecimento de ID com IA para caixas
+      _logService.info('Iniciando reconhecimento de ID de caixa', category: 'recognition');
       final boxesScreen = _screens[0] as BoxesScreen;
       boxesScreen.showBoxIdRecognition(context);
     }
@@ -68,6 +83,7 @@ class _MainScreenState extends State<MainScreen> {
   void _showObjectRecognition() {
     if (_selectedIndex == 1) {
       // Reconhecimento de objetos com IA
+      _logService.info('Iniciando reconhecimento de objeto', category: 'recognition');
       final itemsScreen = _screens[1] as ItemsScreen;
       itemsScreen.showObjectRecognition(context);
     }
@@ -77,6 +93,16 @@ class _MainScreenState extends State<MainScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const SettingsScreen()),
+    );
+  }
+
+  void _openLogs() {
+    // Registrar que a tela de logs foi aberta
+    _logService.info('Tela de logs aberta pelo usuário', category: 'navigation');
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const LogsScreen()),
     );
   }
 
@@ -123,6 +149,13 @@ class _MainScreenState extends State<MainScreen> {
               tooltip: 'Identificar objeto com IA',
             ),
           ],
+
+          // Botão de logs (sempre visível)
+          IconButton(
+            icon: const Icon(Icons.bug_report),
+            onPressed: _openLogs,
+            tooltip: 'Logs do sistema',
+          ),
 
           // Botão de configurações (sempre visível)
           IconButton(

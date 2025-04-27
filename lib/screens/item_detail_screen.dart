@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'dart:convert';
+import 'dart:io';
 import 'package:boxmagic/models/item.dart';
+import 'package:boxmagic/models/box.dart';
 import 'package:boxmagic/services/database_helper.dart';
 import 'package:boxmagic/widgets/edit_item_dialog.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class ItemDetailScreen extends StatefulWidget {
   final Item item;
@@ -109,10 +113,23 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                 margin: const EdgeInsets.only(bottom: 16),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(8),
-                  image: DecorationImage(
-                    image: NetworkImage(_item.image!),
-                    fit: BoxFit.cover,
-                  ),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: Image.memory(
+                  base64Decode(_item.image!),
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      color: Colors.grey[300],
+                      child: const Center(
+                        child: Icon(
+                          Icons.broken_image,
+                          size: 64,
+                          color: Colors.grey,
+                        ),
+                      ),
+                    );
+                  },
                 ),
               ),
 
@@ -131,7 +148,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    
+
                     // Category
                     if (_item.category != null && _item.category!.isNotEmpty) ...[
                       const Text(
@@ -143,7 +160,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                       Text(_item.category!),
                       const SizedBox(height: 8),
                     ],
-                    
+
                     // Box
                     const Text(
                       'Caixa:',
@@ -165,7 +182,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                       ],
                     ),
                     const SizedBox(height: 8),
-                    
+
                     // Description
                     if (_item.description != null && _item.description!.isNotEmpty) ...[
                       const Text(
@@ -177,7 +194,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                       Text(_item.description!),
                       const SizedBox(height: 8),
                     ],
-                    
+
                     // Dates
                     const Divider(),
                     Text(
