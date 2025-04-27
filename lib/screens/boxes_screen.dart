@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:boxmagic/models/box.dart';
+import 'package:boxmagic/models/item.dart';
 import 'package:boxmagic/services/database_helper.dart';
 import 'package:boxmagic/services/preferences_service.dart';
 import 'package:boxmagic/services/log_service.dart';
+import 'package:boxmagic/services/label_printing_service.dart';
 import 'package:boxmagic/widgets/new_box_dialog.dart';
 import 'package:boxmagic/screens/box_detail_screen.dart';
 import 'package:boxmagic/screens/box_id_recognition_screen.dart';
@@ -222,6 +224,12 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
     // Lista de caixas selecionadas para impressão
     final selectedBoxes = <int>[];
 
+    // Formato de etiqueta selecionado
+    var selectedFormat = LabelFormat.nameWithBarcodeAndId;
+
+    // Tipo de papel selecionado
+    var selectedPaperType = LabelPaperType.pimaco6180;
+
     await showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -229,6 +237,7 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
           title: const Text('Imprimir Etiquetas'),
           content: SizedBox(
             width: double.maxFinite,
+            height: MediaQuery.of(context).size.height * 0.7,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -277,6 +286,70 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
                     },
                   ),
                 ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Formato da etiqueta:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<LabelFormat>(
+                  value: selectedFormat,
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ),
+                  items: [
+                    DropdownMenuItem(
+                      value: LabelFormat.nameWithBarcodeAndId,
+                      child: Text('Nome da caixa + código de barras + ID'),
+                    ),
+                    DropdownMenuItem(
+                      value: LabelFormat.idWithBarcode,
+                      child: Text('Somente ID + código de barras'),
+                    ),
+                    DropdownMenuItem(
+                      value: LabelFormat.idWithBarcodeAndItems,
+                      child: Text('ID + código de barras + itens da caixa'),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    setState(() {
+                      selectedFormat = value!;
+                    });
+                  },
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Tipo de papel:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<LabelPaperType>(
+                  value: selectedPaperType,
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ),
+                  items: [
+                    DropdownMenuItem(
+                      value: LabelPaperType.pimaco6180,
+                      child: Text('Pimaco 6180 - Padrão Correios (A4 com 10 etiquetas)'),
+                    ),
+                    DropdownMenuItem(
+                      value: LabelPaperType.pimaco6082,
+                      child: Text('Pimaco 6082 - 2 colunas, 14 linhas (A4 com 28 etiquetas)'),
+                    ),
+                    DropdownMenuItem(
+                      value: LabelPaperType.a4Full,
+                      child: Text('Página A4 inteira (3 etiquetas por página)'),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    setState(() {
+                      selectedPaperType = value!;
+                    });
+                  },
+                ),
               ],
             ),
           ),
@@ -290,7 +363,7 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
                   ? null
                   : () {
                       Navigator.pop(context);
-                      _printLabels(selectedBoxes);
+                      _printLabels(selectedBoxes, selectedFormat, selectedPaperType);
                     },
               child: const Text('Imprimir'),
             ),
@@ -300,20 +373,42 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
     );
   }
 
-  void _printLabels(List<int> boxIds) {
-    // Em um aplicativo real, isso enviaria os dados para uma impressora
-    // ou geraria um PDF para impressão
+  Future<void> _printLabels(
+    List<int> boxIds,
+    LabelFormat format,
+    LabelPaperType paperType
+  ) async {
+    try {
+      // Mostrar mensagem de carregamento
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Preparando etiquetas para impressão...'),
+          duration: Duration(seconds: 2),
+        ),
+      );
 
-    // Mostrar mensagem de simulação
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Simulando impressão de etiquetas...'),
-        duration: Duration(seconds: 2),
-      ),
-    );
+      // Obter as caixas selecionadas
+      final selectedBoxes = _boxes.where((box) => box.id != null && boxIds.contains(box.id)).toList();
 
-    // Após 2 segundos, mostrar mensagem de sucesso
-    Future.delayed(const Duration(seconds: 2), () {
+      // Obter os itens de cada caixa
+      final boxItems = <int, List<Item>>{};
+      for (final boxId in boxIds) {
+        final items = await _databaseHelper.readItemsByBoxId(boxId);
+        boxItems[boxId] = items;
+      }
+
+      // Criar serviço de impressão
+      final printingService = LabelPrintingService();
+
+      // Imprimir etiquetas
+      await printingService.printLabels(
+        boxes: selectedBoxes,
+        boxItems: boxItems,
+        format: format,
+        paperType: paperType,
+      );
+
+      // Mostrar mensagem de sucesso
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -322,7 +417,17 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
           ),
         );
       }
-    });
+    } catch (e) {
+      // Mostrar mensagem de erro
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro ao imprimir etiquetas: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _showBoxIdRecognition() async {
