@@ -177,11 +177,19 @@ class _BoxDetailScreenState extends State<BoxDetailScreen> {
               size: 200.0,
             ),
             const SizedBox(height: 16),
-            Text(
-              'ID: ${_box.id}',
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
+              decoration: BoxDecoration(
+                color: Theme.of(context).primaryColor,
+                borderRadius: BorderRadius.circular(4.0),
+              ),
+              child: Text(
+                '#${_box.formattedId}',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
               ),
             ),
             Text(
@@ -204,7 +212,25 @@ class _BoxDetailScreenState extends State<BoxDetailScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_box.name),
+        title: Row(
+          children: [
+            Expanded(child: Text(_box.name)),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 2.0),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(4.0),
+              ),
+              child: Text(
+                '#${_box.formattedId}',
+                style: TextStyle(
+                  color: Theme.of(context).primaryColor,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.qr_code),
@@ -237,11 +263,18 @@ class _BoxDetailScreenState extends State<BoxDetailScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        'ID: ${_box.id}',
-                        style: TextStyle(
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 2.0),
+                        decoration: BoxDecoration(
                           color: Theme.of(context).primaryColor,
-                          fontWeight: FontWeight.bold,
+                          borderRadius: BorderRadius.circular(4.0),
+                        ),
+                        child: Text(
+                          '#${_box.formattedId}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                       Text(

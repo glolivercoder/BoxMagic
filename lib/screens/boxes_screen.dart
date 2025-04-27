@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:boxmagic/models/box.dart';
 import 'package:boxmagic/services/database_helper.dart';
 import 'package:boxmagic/services/preferences_service.dart';
+import 'package:boxmagic/services/log_service.dart';
 import 'package:boxmagic/widgets/new_box_dialog.dart';
 import 'package:boxmagic/screens/box_detail_screen.dart';
 import 'package:boxmagic/screens/box_id_recognition_screen.dart';
@@ -49,6 +50,7 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
   }
   final DatabaseHelper _databaseHelper = DatabaseHelper.instance;
   final PreferencesService _preferencesService = PreferencesService();
+  final LogService _logService = LogService();
   List<Box> _boxes = [];
   bool _isLoading = true;
   final TextEditingController _searchController = TextEditingController();
@@ -69,19 +71,44 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
     });
 
     try {
+      _logService.info('Iniciando carregamento de caixas na tela de caixas', category: 'boxes_screen');
+
       final boxes = await _databaseHelper.readAllBoxes();
+      _logService.info('Caixas carregadas: ${boxes.length}', category: 'boxes_screen');
+
+      // Log detalhado das caixas
+      if (boxes.isNotEmpty) {
+        for (int i = 0; i < boxes.length; i++) {
+          _logService.debug('Caixa $i: ID=${boxes[i].id}, Nome=${boxes[i].name}', category: 'boxes_screen');
+        }
+      } else {
+        _logService.warning('Nenhuma caixa encontrada no banco de dados', category: 'boxes_screen');
+      }
+
       setState(() {
         _boxes = boxes;
         _filteredBoxes = boxes;
         _isLoading = false;
       });
-    } catch (e) {
+
+      _logService.info('Carregamento de caixas concluído com sucesso', category: 'boxes_screen');
+    } catch (e, stackTrace) {
+      _logService.error(
+        'Erro ao carregar caixas',
+        error: e,
+        stackTrace: stackTrace,
+        category: 'boxes_screen'
+      );
+
       setState(() {
         _isLoading = false;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro ao carregar caixas: $e')),
-      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao carregar caixas: $e')),
+        );
+      }
     }
   }
 
@@ -101,13 +128,29 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
   }
 
   Future<void> _showNewBoxDialog() async {
-    final result = await showDialog<Box>(
-      context: context,
-      builder: (context) => const NewBoxDialog(),
-    );
+    _logService.info('Abrindo diálogo para criar nova caixa', category: 'boxes_screen');
 
-    if (result != null) {
-      await _loadBoxes();
+    if (mounted) {
+      final result = await showDialog<Box>(
+        context: context,
+        builder: (context) => const NewBoxDialog(),
+      );
+
+      if (result != null) {
+        _logService.info('Nova caixa criada: ${result.name} (ID: ${result.id})', category: 'boxes_screen');
+
+        // Recarregar as caixas
+        await _loadBoxes();
+
+        // Importante: Notificar a tela de itens que uma nova caixa foi criada
+        // Este é um ponto crítico para garantir que a tela de itens reconheça as caixas
+        _logService.info('Notificando outras telas sobre a nova caixa', category: 'boxes_screen');
+
+        // Forçar uma atualização do DatabaseHelper para garantir que a nova caixa seja reconhecida
+        await _databaseHelper.readAllBoxes();
+      } else {
+        _logService.info('Criação de caixa cancelada pelo usuário', category: 'boxes_screen');
+      }
     }
   }
 
@@ -199,8 +242,27 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
                     itemBuilder: (context, index) {
                       final box = _boxes[index];
                       return CheckboxListTile(
-                        title: Text(box.name),
-                        subtitle: Text('ID: ${box.id}'),
+                        title: Row(
+                          children: [
+                            Expanded(child: Text(box.name)),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 2.0),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).primaryColor,
+                                borderRadius: BorderRadius.circular(4.0),
+                              ),
+                              child: Text(
+                                '#${box.formattedId}',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12.0,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        subtitle: Text(box.category),
                         value: selectedBoxes.contains(box.id),
                         onChanged: (value) {
                           setState(() {
@@ -366,22 +428,28 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
                                   backgroundColor: Theme.of(context).primaryColor,
                                   child: const Icon(Icons.inbox, color: Colors.white),
                                 ),
-                                title: Text(box.name),
-                                subtitle: Text(box.category),
-                                trailing: Row(
-                                  mainAxisSize: MainAxisSize.min,
+                                title: Row(
                                   children: [
-                                    Text(
-                                      '#${box.id}',
-                                      style: TextStyle(
+                                    Expanded(child: Text(box.name)),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 2.0),
+                                      decoration: BoxDecoration(
                                         color: Theme.of(context).primaryColor,
-                                        fontWeight: FontWeight.bold,
+                                        borderRadius: BorderRadius.circular(4.0),
+                                      ),
+                                      child: Text(
+                                        '#${box.formattedId}',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 12.0,
+                                        ),
                                       ),
                                     ),
-                                    const SizedBox(width: 8),
-                                    const Icon(Icons.chevron_right),
                                   ],
                                 ),
+                                subtitle: Text(box.category),
+                                trailing: const Icon(Icons.chevron_right),
                                 onTap: () {
                                   Navigator.push(
                                     context,
