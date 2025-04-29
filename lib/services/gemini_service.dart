@@ -41,6 +41,15 @@ class GeminiService {
       _logService.info('Iniciando reconhecimento de ID de caixa', category: 'gemini');
       _logService.debug('Arquivo de imagem: ${imageFile.path}', category: 'gemini');
 
+      // PROMPT MELHORADO PARA GEMINI (para uso futuro com API real):
+      // "Analise a imagem e identifique se há algum QR Code ou número de identificação de caixa escrito à mão (ex: 1001, 1002, etc). 
+      // Se encontrar um QR Code, extraia o valor e retorne o tipo 'qr_code'.
+      // Se encontrar um número escrito à mão, extraia o valor e retorne o tipo 'handwritten'.
+      // Responda apenas com um JSON válido no formato:
+      // { "type": "qr_code" | "handwritten", "value": "<id ou valor lido>" }
+      // Se não encontrar nada, responda { "type": "none", "value": "" }
+      // Não inclua nenhum texto extra além do JSON."
+
       // Simular o reconhecimento (em um app real, usaríamos a API do Gemini)
       // Retornar um ID aleatório entre 1001 e 1010 para simular o reconhecimento
       final simulatedId = 1000 + (DateTime.now().millisecondsSinceEpoch % 10) + 1;
