@@ -154,16 +154,21 @@ class _ObjectRecognitionScreenState extends State<ObjectRecognitionScreen> {
               
               // Imagem capturada
               if (_imageFile != null)
-                Container(
-                  width: double.infinity,
-                  height: 300,
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey),
-                    borderRadius: BorderRadius.circular(8),
+                AspectRatio(
+                  aspectRatio: 16 / 9, // Proporção widescreen, pode ajustar conforme preferir
+                  child: Container(
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: kIsWeb
+                          ? Image.network(_imageFile!.path, fit: BoxFit.contain)
+                          : Image.file(File(_imageFile!.path), fit: BoxFit.contain),
+                    ),
                   ),
-                  child: kIsWeb
-                      ? Image.network(_imageFile!.path, fit: BoxFit.cover)
-                      : Image.file(File(_imageFile!.path), fit: BoxFit.cover),
                 ),
               
               const SizedBox(height: 24),

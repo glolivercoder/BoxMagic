@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="500" height="500">
+  <!-- Fundo circular -->
+  <circle cx="250" cy="250" r="250" fill="#e0f2f1"/>
+  
+  <!-- Caixa -->
+  <g transform="translate(100, 120) scale(0.8)">
+    <!-- Corpo da caixa -->
+    <rect x="50" y="100" width="300" height="250" fill="#8d6e63" stroke="#5d4037" stroke-width="5"/>
+    
+    <!-- Linhas verticais da caixa -->
+    <line x1="80" y1="100" x2="80" y2="350" stroke="#5d4037" stroke-width="2"/>
+    <line x1="110" y1="100" x2="110" y2="350" stroke="#5d4037" stroke-width="2"/>
+    <line x1="140" y1="100" x2="140" y2="350" stroke="#5d4037" stroke-width="2"/>
+    <line x1="170" y1="100" x2="170" y2="350" stroke="#5d4037" stroke-width="2"/>
+    <line x1="200" y1="100" x2="200" y2="350" stroke="#5d4037" stroke-width="2"/>
+    <line x1="230" y1="100" x2="230" y2="350" stroke="#5d4037" stroke-width="2"/>
+    <line x1="260" y1="100" x2="260" y2="350" stroke="#5d4037" stroke-width="2"/>
+    <line x1="290" y1="100" x2="290" y2="350" stroke="#5d4037" stroke-width="2"/>
+    <line x1="320" y1="100" x2="320" y2="350" stroke="#5d4037" stroke-width="2"/>
+    
+    <!-- Tampa aberta -->
+    <path d="M50,100 L0,50 L300,50 L350,100 Z" fill="#8d6e63" stroke="#5d4037" stroke-width="5"/>
+    
+    <!-- Linhas horizontais da tampa -->
+    <line x1="30" y1="60" x2="320" y2="60" stroke="#5d4037" stroke-width="2"/>
+    <line x1="20" y1="70" x2="330" y2="70" stroke="#5d4037" stroke-width="2"/>
+    <line x1="10" y1="80" x2="340" y2="80" stroke="#5d4037" stroke-width="2"/>
+    <line x1="5" y1="90" x2="345" y2="90" stroke="#5d4037" stroke-width="2"/>
+    
+    <!-- Brilho mágico -->
+    <circle cx="200" cy="150" r="80" fill="#ff8a65" opacity="0.8"/>
+    
+    <!-- Estrelas -->
+    <path d="M180,120 L190,140 L210,140 L195,155 L200,175 L180,165 L160,175 L165,155 L150,140 L170,140 Z" fill="#ffeb3b"/>
+    <path d="M230,130 L235,140 L245,140 L238,148 L240,160 L230,155 L220,160 L222,148 L215,140 L225,140 Z" fill="#ffeb3b"/>
+    <path d="M160,180 L165,190 L175,190 L168,198 L170,210 L160,205 L150,210 L152,198 L145,190 L155,190 Z" fill="#ffeb3b"/>
+    
+    <!-- Rosto da caixa -->
+    <circle cx="150" cy="280" r="15" fill="white" stroke="#5d4037" stroke-width="2"/> <!-- Olho esquerdo -->
+    <path d="M250,280 C250,270 240,270 240,280" stroke="#5d4037" stroke-width="5" fill="none"/> <!-- Olho direito piscando -->
+    <path d="M170,320 C170,340 230,340 230,320" stroke="#5d4037" stroke-width="5" fill="none"/> <!-- Sorriso -->
+  </g>
+  
+  <!-- Texto "MagicBox" -->
+  <text x="250" y="80" font-family="Arial" font-size="50" font-weight="bold" text-anchor="middle" fill="#00796b">MagicBox</text>
+</svg>

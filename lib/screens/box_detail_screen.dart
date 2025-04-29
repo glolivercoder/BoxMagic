@@ -233,16 +233,6 @@ class _BoxDetailScreenState extends State<BoxDetailScreen> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.qr_code),
-            onPressed: _showQRCode,
-            tooltip: 'Mostrar código QR',
-          ),
-          IconButton(
-            icon: const Icon(Icons.edit),
-            onPressed: _showEditBoxDialog,
-            tooltip: 'Editar caixa',
-          ),
-          IconButton(
             icon: const Icon(Icons.delete),
             onPressed: _deleteBox,
             tooltip: 'Excluir caixa',
@@ -324,28 +314,15 @@ class _BoxDetailScreenState extends State<BoxDetailScreen> {
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: _showObjectRecognition,
-                        icon: const Icon(Icons.camera_alt, size: 18),
-                        label: const Text('Identificar'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                        ),
-                      ),
+                    IconButton(
+                      icon: const Icon(Icons.qr_code),
+                      tooltip: 'Mostrar código QR',
+                      onPressed: _showQRCode,
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: _showNewItemDialog,
-                        icon: const Icon(Icons.add, size: 18),
-                        label: const Text('Adicionar'),
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                        ),
-                      ),
+                    IconButton(
+                      icon: const Icon(Icons.edit),
+                      tooltip: 'Editar caixa',
+                      onPressed: _showEditBoxDialog,
                     ),
                   ],
                 ),

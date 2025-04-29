@@ -24,7 +24,9 @@ class GeminiService {
   /// Recupera a chave da API Gemini salva nas preferências.
   Future<String> getApiKey() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_apiKeyPrefKey) ?? '';
+    // Chave padrão do repositório (substitua pelo valor real, se necessário)
+    const String defaultApiKey = 'AIzaSyA...';
+    return prefs.getString(_apiKeyPrefKey) ?? defaultApiKey;
   }
 
   /// Atualiza a chave da API Gemini nas preferências.

@@ -110,7 +110,20 @@ class _MainScreenState extends State<MainScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('BoxMagic'),
+        toolbarHeight: 80,
+        leading: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Image.asset(
+            'assets/magicbox_mascot.png',
+            fit: BoxFit.contain,
+            height: 64,
+            width: 64,
+          ),
+        ),
+        title: const Text(
+          'MagicBox',
+          style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+        ),
         actions: [
           // Botões específicos para a aba de Caixas
           if (_selectedIndex == 0) ...[

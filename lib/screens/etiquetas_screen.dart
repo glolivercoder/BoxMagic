@@ -4,6 +4,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:barcode/barcode.dart';
+import 'package:barcode_widget/barcode_widget.dart';
 import 'dart:typed_data';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
@@ -23,6 +24,9 @@ class EtiquetasScreen extends StatefulWidget {
 }
 
 class _EtiquetasScreenState extends State<EtiquetasScreen> {
+  String _barcodeValue = '';
+  bool _showBarcode = false;
+
   Etiqueta? _selectedEtiqueta;
   bool _modoPersonalizado = false;
 
@@ -732,6 +736,50 @@ class _EtiquetasScreenState extends State<EtiquetasScreen> {
 
   @override
   Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Etiquetas')),
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Campo para digitar o valor do código de barras
+              TextField(
+                decoration: const InputDecoration(
+                  labelText: 'Valor do Código de Barras',
+                  border: OutlineInputBorder(),
+                ),
+                onChanged: (value) {
+                  setState(() {
+                    _barcodeValue = value;
+                  });
+                },
+              ),
+              const SizedBox(height: 10),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.qr_code),
+                label: const Text('Gerar Código de Barras'),
+                onPressed: _barcodeValue.isNotEmpty
+                    ? () {
+                        setState(() {
+                          _showBarcode = true;
+                        });
+                      }
+                    : null,
+              ),
+              const SizedBox(height: 24),
+              if (_showBarcode && _barcodeValue.isNotEmpty)
+                Center(
+                  child: BarcodeWidget(
+                    barcode: Barcode.code128(),
+                    data: _barcodeValue,
+                    width: 280,
+                    height: 80,
+                    drawText: true,
+                  ),
+                ),
+              const SizedBox(height: 24),
     return Scaffold(
       appBar: AppBar(
         title: const Text('Impressão de Etiquetas'),

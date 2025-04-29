@@ -1,0 +1,39 @@
+{
+  "timestamp": "2025-04-27T00:01:08.442",
+  "version": "1.0.0",
+  "boxes": [
+    {
+      "id": 1745722837461,
+      "name": "ITENS Diversos",
+      "category": "DIVERSOS",
+      "description": null,
+      "image": null,
+      "createdAt": "2025-04-27T00:00:37.458",
+      "updatedAt": null,
+      "barcodeDataUrl": null
+    }
+  ],
+  "items": [
+    {
+      "id": 1745722868425,
+      "name": "Controle Remoto",
+      "category": "DIVERSOS",
+      "description": null,
+      "image": null,
+      "boxId": 1745722837461,
+      "createdAt": "2025-04-27T00:01:08.400",
+      "updatedAt": null
+    },
+    {
+      "id": 1745722927997,
+      "name": "Alicate de unha",
+      "category": "DIVERSOS",
+      "description": null,
+      "image": null,
+      "boxId": 1745722837461,
+      "createdAt": "2025-04-27T00:02:07.969",
+      "updatedAt": null
+    }
+  ],
+  "users": []
+}
