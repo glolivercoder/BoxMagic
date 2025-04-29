@@ -112,12 +112,12 @@ class _MainScreenState extends State<MainScreen> {
       appBar: AppBar(
         toolbarHeight: 80,
         leading: Padding(
-          padding: const EdgeInsets.all(8.0),
+          padding: EdgeInsets.zero,
           child: Image.asset(
             'assets/magicbox_mascot.png',
             fit: BoxFit.contain,
-            height: 64,
-            width: 64,
+            height: 80,
+            width: 80,
           ),
         ),
         title: const Text(

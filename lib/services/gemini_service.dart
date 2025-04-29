@@ -84,7 +84,7 @@ Responda SOMENTE com um JSON válido.
 
       // Usar o pacote google_generative_ai para enviar imagem e prompt
       final model = GenerativeModel(
-        model: 'gemini-pro-vision',
+        model: 'gemini-1.5-flash',
         apiKey: apiKey,
       );
 

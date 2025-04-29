@@ -776,33 +776,55 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         style: TextStyle(fontSize: 14),
                       ),
                       const SizedBox(height: 12),
-                      TextField(
-                        controller: _apiKeyController,
-                        decoration: InputDecoration(
-                          labelText: 'Chave da API Gemini',
-                          hintText: 'Insira sua chave da API Gemini',
-                          border: const OutlineInputBorder(),
-                          suffixIcon: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                icon: Icon(
-                                  _isApiKeyVisible ? Icons.visibility_off : Icons.visibility,
-                                ),
-                                onPressed: () {
-                                  setState(() {
-                                    _isApiKeyVisible = !_isApiKeyVisible;
-                                  });
-                                },
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _apiKeyController,
+                              decoration: const InputDecoration(
+                                labelText: 'Chave da API Gemini',
+                                hintText: 'Insira sua chave da API Gemini',
+                                border: OutlineInputBorder(),
                               ),
-                              IconButton(
-                                icon: const Icon(Icons.save),
-                                onPressed: _saveGeminiApiKey,
-                              ),
-                            ],
+                              obscureText: !_isApiKeyVisible,
+                            ),
                           ),
-                        ),
-                        obscureText: !_isApiKeyVisible,
+                          const SizedBox(width: 8),
+                          IconButton(
+                            icon: Icon(_isApiKeyVisible ? Icons.visibility_off : Icons.visibility),
+                            tooltip: _isApiKeyVisible ? 'Ocultar chave' : 'Mostrar chave',
+                            onPressed: () {
+                              setState(() {
+                                _isApiKeyVisible = !_isApiKeyVisible;
+                              });
+                            },
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.save),
+                            tooltip: 'Salvar chave',
+                            onPressed: _saveGeminiApiKey,
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.remove_red_eye_outlined),
+                            tooltip: 'Exibir chave salva',
+                            onPressed: () async {
+                              final key = _apiKeyController.text.trim();
+                              await showDialog(
+                                context: context,
+                                builder: (context) => AlertDialog(
+                                  title: const Text('Chave Gemini salva'),
+                                  content: Text(key.isEmpty ? 'Nenhuma chave salva.' : key),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(context),
+                                      child: const Text('Fechar'),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 8),
                       const Text(
