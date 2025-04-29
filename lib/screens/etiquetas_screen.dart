@@ -243,21 +243,36 @@ class _EtiquetasScreenState extends State<EtiquetasScreen> {
                   ),
                 ],
               ),
-              body: PdfPreview(
-                build: (format) => Future.value(bytes),
-                allowPrinting: true,
-                allowSharing: true,
-                canChangePageFormat: false,
-                canChangeOrientation: false,
-                initialPageFormat: PdfPageFormat.a4,
-                pdfFileName: 'Etiquetas_${_selectedEtiqueta!.nome}.pdf',
-                previewPageMargin: const EdgeInsets.all(10),
-                scrollViewDecoration: BoxDecoration(
-                  color: Colors.grey.shade200,
-                ),
-                maxPageWidth: 700,
-                actions: const [],
-                useActions: false,  // Desabilitar botões padrão para usar nossos próprios botões
+              body: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Text(
+                      'O preview abaixo respeita o tamanho real do papel A4 e das etiquetas.\n'
+                      'Se as etiquetas parecerem pequenas, é porque o modelo selecionado realmente possui dimensões menores.',
+                      style: TextStyle(color: Colors.grey[700]),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                  Expanded(
+                    child: PdfPreview(
+                      build: (format) => Future.value(bytes),
+                      allowPrinting: true,
+                      allowSharing: true,
+                      canChangePageFormat: false,
+                      canChangeOrientation: false,
+                      initialPageFormat: PdfPageFormat.a4,
+                      pdfFileName: 'Etiquetas_${_selectedEtiqueta!.nome}.pdf',
+                      previewPageMargin: const EdgeInsets.all(10),
+                      scrollViewDecoration: BoxDecoration(
+                        color: Colors.grey.shade200,
+                      ),
+                      maxPageWidth: PdfPageFormat.a4.width, // 595 pt = 21 cm
+                      actions: const [],
+                      useActions: false,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
