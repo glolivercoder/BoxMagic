@@ -189,13 +189,13 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
               for (final barcode in barcodes) {
                 if (barcode.rawValue != null) {
                   final String code = barcode.rawValue!;
-                  // Try to find a box with this ID
+                  // Tenta converter o código para int (ID da caixa)
                   try {
                     final boxId = int.parse(code);
                     Navigator.pop(context, boxId);
                   } catch (e) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Código inválido')),
+                      SnackBar(content: Text('Código inválido: $code')),
                     );
                   }
                 }
@@ -206,26 +206,24 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
       ),
     );
 
-    if (result != null && result is int) {
+    if (result != null) {
+      await _loadBoxes();
+      // Se o resultado for um ID de caixa, tente abrir automaticamente
       try {
-        // Find the box with this ID
-        final box = _boxes.firstWhere(
-          (box) => box.id == result,
-          orElse: () => throw Exception('Caixa não encontrada'),
-        );
-
+        final int boxId = int.parse(result.toString());
+        final box = _boxes.firstWhere((b) => b.id == boxId, orElse: () => throw Exception('Caixa não encontrada'));
         if (mounted) {
           Navigator.push(
             context,
             MaterialPageRoute(
               builder: (context) => BoxDetailScreen(box: box),
             ),
-          ).then((_) => _loadBoxes());
+          );
         }
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Erro: $e')),
+            SnackBar(content: Text('Erro ao abrir caixa automaticamente: $e')),
           );
         }
       }
@@ -233,12 +231,13 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
   }
 
   Future<void> _showPrintLabelsDialog() async {
-  if (_boxes.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Não há caixas para imprimir etiquetas')),
-    );
-    return;
-  }
+    if (_boxes.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Não há caixas para imprimir etiquetas')),
+      );
+      return;
+    }
+
 
   // Lista de caixas selecionadas para impressão
   final selectedBoxes = <int>[];
@@ -657,6 +656,25 @@ Future<void> _printLabelsComModelo(
 
     if (result != null) {
       await _loadBoxes();
+      // Se o resultado for um ID de caixa, tente abrir automaticamente
+      try {
+        final int boxId = int.parse(result.toString());
+        final box = _boxes.firstWhere((b) => b.id == boxId, orElse: () => throw Exception('Caixa não encontrada'));
+        if (mounted) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => BoxDetailScreen(box: box),
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Erro ao abrir caixa automaticamente: $e')),
+          );
+        }
+      }
     }
   }
 
