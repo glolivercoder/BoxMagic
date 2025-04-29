@@ -37,7 +37,7 @@ class _NewItemDialogState extends State<NewItemDialog> {
   final _persistenceService = PersistenceService();
   final _logService = LogService();
   final _imagePicker = ImagePicker();
-  List<String> _categories = [];
+  List<String> _categories = ['Diversos'];
   List<Box> _boxes = [];
   bool _isLoading = true;
 
