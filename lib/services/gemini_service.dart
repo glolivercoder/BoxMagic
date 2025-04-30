@@ -79,7 +79,8 @@ class GeminiService {
       final content = [
         Content.multi([
           TextPart('Analise esta imagem e encontre um número de identificação de caixa com exatamente 4 dígitos. '
-                  'Retorne apenas o número encontrado, sem texto adicional. '
+                  'O número pode estar precedido pelo símbolo # (por exemplo, #1234). '
+                  'Retorne apenas os 4 dígitos encontrados, sem o símbolo # e sem texto adicional. '
                   'Se não encontrar um número de 4 dígitos, retorne "NÃO ENCONTRADO".'),
           DataPart('image/jpeg', bytes),
         ]),
@@ -88,10 +89,14 @@ class GeminiService {
       final response = await _model!.generateContent(content);
       final text = response.text?.trim() ?? '';
 
-      final regex = RegExp(r'^\d{4}$');
-      if (regex.hasMatch(text)) {
-        _logService.info('ID da caixa reconhecido: $text', category: 'gemini');
-        return text;
+      // Regex para extrair 4 dígitos, com ou sem # prefixo
+      final regex = RegExp(r'#?(\d{4})');
+      final match = regex.firstMatch(text);
+      
+      if (match != null) {
+        final digits = match.group(1)!;
+        _logService.info('ID da caixa reconhecido: $digits', category: 'gemini');
+        return digits;
       } else {
         _logService.warning('ID da caixa não encontrado na imagem', category: 'gemini');
         return null;
