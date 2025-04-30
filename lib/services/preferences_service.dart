@@ -120,6 +120,11 @@ class PreferencesService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_lastModelKey, modelName);
   }
+  
+  // Save last used label model (alias for saveLastUsedModel for consistency)
+  Future<void> saveLastUsedLabelModel(String modelName) async {
+    return saveLastUsedModel(modelName);
+  }
 
   // Get last used model
   Future<String?> getLastUsedModel() async {

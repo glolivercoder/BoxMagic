@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:boxmagic/models/box.dart';
 import 'package:boxmagic/models/item.dart';
 import 'package:boxmagic/services/database_helper.dart';
@@ -383,13 +384,17 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
                         items: modelosPimaco.map((modelo) {
                           return DropdownMenuItem<Etiqueta>(
                             value: modelo,
-                            child: Text(modelo.nome),
+                            child: Text(
+                              '${modelo.nome} - ${modelo.larguraCm.toStringAsFixed(1)}x${modelo.alturaCm.toStringAsFixed(1)}cm (${modelo.etiquetasPorFolha} por folha)',
+                            ),
                           );
                         }).toList(),
                         onChanged: (Etiqueta? value) {
                           setState(() {
                             if (value != null) {
                               selectedPaperType = _mapModeloToPaperType(value);
+                              // Salvar último modelo usado
+                              _preferencesService.saveLastUsedLabelModel(value.nome);
                               // Atualizar visualização prévia
                               generatePreview(selectedBoxes, selectedFormat, selectedPaperType);
                             }
@@ -424,35 +429,67 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
                                               style: const TextStyle(fontWeight: FontWeight.bold),
                                             ),
                                             const SizedBox(height: 10),
-                                            ElevatedButton.icon(
-                                              onPressed: () async {
-                                                if (previewPdf == null) return;
-                                                
-                                                ScaffoldMessenger.of(context).showSnackBar(
-                                                  const SnackBar(content: Text('Abrindo visualização...')),
-                                                );
-                                                
-                                                // Pequeno atraso para garantir que o contexto esteja estável
-                                                Future.delayed(const Duration(milliseconds: 300), () async {
-                                                  try {
-                                                    if (mounted && previewPdf != null) {
-                                                      await Printing.layoutPdf(
-                                                        onLayout: (_) => previewPdf!,
-                                                        name: 'Etiquetas BoxMagic',
-                                                        format: PdfPageFormat.a4,
-                                                      );
+                                            Row(
+                                              mainAxisAlignment: MainAxisAlignment.center,
+                                              children: [
+                                                ElevatedButton.icon(
+                                                  onPressed: () async {
+                                                    if (previewPdf == null) return;
+                                                    
+                                                    ScaffoldMessenger.of(context).showSnackBar(
+                                                      const SnackBar(content: Text('Abrindo visualização...')),
+                                                    );
+                                                    
+                                                    // Pequeno atraso para garantir que o contexto esteja estável
+                                                    Future.delayed(const Duration(milliseconds: 300), () async {
+                                                      try {
+                                                        if (mounted && previewPdf != null) {
+                                                          await Printing.layoutPdf(
+                                                            onLayout: (_) => previewPdf!,
+                                                            name: 'Etiquetas BoxMagic',
+                                                            format: PdfPageFormat.a4,
+                                                          );
+                                                        }
+                                                      } catch (e) {
+                                                        if (mounted) {
+                                                          ScaffoldMessenger.of(context).showSnackBar(
+                                                            SnackBar(content: Text('Erro ao abrir visualização: $e')),
+                                                          );
+                                                        }
+                                                      }
+                                                    });
+                                                  },
+                                                  icon: const Icon(Icons.preview),
+                                                  label: const Text('Visualizar PDF'),
+                                                ),
+                                                const SizedBox(width: 8),
+                                                ElevatedButton.icon(
+                                                  onPressed: () {
+                                                    // Exportar etiquetas para formato de texto compatível
+                                                    String exportText = '';
+                                                    for (final box in selectedBoxes) {
+                                                      exportText += '#${box.formattedId} - ${box.name}\n';
+                                                      exportText += '${box.category}\n\n';
                                                     }
-                                                  } catch (e) {
-                                                    if (mounted) {
-                                                      ScaffoldMessenger.of(context).showSnackBar(
-                                                        SnackBar(content: Text('Erro ao abrir visualização: $e')),
-                                                      );
-                                                    }
-                                                  }
-                                                });
-                                              },
-                                              icon: const Icon(Icons.preview),
-                                              label: const Text('Visualizar PDF'),
+                                                    
+                                                    // Copiar para a área de transferência
+                                                    Clipboard.setData(ClipboardData(text: exportText));
+                                                    
+                                                    ScaffoldMessenger.of(context).showSnackBar(
+                                                      const SnackBar(
+                                                        content: Text('Etiquetas copiadas para a área de transferência'),
+                                                        backgroundColor: Colors.green,
+                                                      ),
+                                                    );
+                                                  },
+                                                  icon: const Icon(Icons.copy),
+                                                  label: const Text('Exportar para Edição'),
+                                                  style: ElevatedButton.styleFrom(
+                                                    backgroundColor: Colors.amber[700],
+                                                    foregroundColor: Colors.white,
+                                                  ),
+                                                ),
+                                              ],
                                             ),
                                           ],
                                         ),

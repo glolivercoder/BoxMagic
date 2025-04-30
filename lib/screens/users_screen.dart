@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:boxmagic/models/user.dart';
 import 'package:boxmagic/services/database_helper.dart';
 import 'package:boxmagic/widgets/new_user_dialog.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class UsersScreen extends StatefulWidget {
   const UsersScreen({super.key});
@@ -103,6 +104,37 @@ class _UsersScreenState extends State<UsersScreen> {
   }
 
   // Method to reset all data (for testing purposes)
+  // Método para abrir o WhatsApp com o número do usuário
+  Future<void> _openWhatsApp(String? phoneNumber) async {
+    if (phoneNumber == null || phoneNumber.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Número de WhatsApp não disponível')),
+      );
+      return;
+    }
+    
+    // Formatar o número (remover caracteres não numéricos)
+    final formattedNumber = phoneNumber.replaceAll(RegExp(r'[^0-9]'), '');
+    
+    // Criar a URL do WhatsApp
+    final whatsappUrl = 'https://wa.me/$formattedNumber';
+    final uri = Uri.parse(whatsappUrl);
+    
+    try {
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        throw 'Não foi possível abrir o WhatsApp';
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao abrir WhatsApp: $e')),
+        );
+      }
+    }
+  }
+
   Future<void> _resetAllData() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -201,7 +233,20 @@ class _UsersScreenState extends State<UsersScreen> {
                               if (user.email != null && user.email!.isNotEmpty)
                                 Text('Email: ${user.email}'),
                               if (user.whatsapp != null && user.whatsapp!.isNotEmpty)
-                                Text('WhatsApp: ${user.whatsapp}'),
+                                Row(
+                                  children: [
+                                    Text('WhatsApp: ${user.whatsapp}'),
+                                    const SizedBox(width: 8),
+                                    InkWell(
+                                      onTap: () => _openWhatsApp(user.whatsapp),
+                                      child: const Icon(
+                                        Icons.chat,
+                                        color: Colors.green,
+                                        size: 20,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                             ],
                           ),
                           trailing: Row(
