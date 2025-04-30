@@ -44,6 +44,8 @@ class _EtiquetasScreenState extends State<EtiquetasScreen> {
   final _espacoEntreEtiquetasController = TextEditingController();
   final _etiquetasPorFolhaController = TextEditingController();
 
+  int _previewKey = 0; // Adicionar controle de versão do preview
+
   @override
   void initState() {
     super.initState();
@@ -138,11 +140,20 @@ class _EtiquetasScreenState extends State<EtiquetasScreen> {
     }
   }
 
+  // Método para limpar cache e forçar atualização
+  void _forcePreviewUpdate() {
+    setState(() {
+      _previewKey++;
+    });
+    Printing.clearCache(); // Limpar cache do PDF
+  }
+
   // Método para visualizar o PDF
   Future<void> _previewPdf() async {
     if (_selectedEtiqueta == null) return;
 
     try {
+      _forcePreviewUpdate(); // Força atualização antes de mostrar preview
       // Mostrar diálogo de carregamento
       showDialog(
         context: context,
@@ -760,14 +771,14 @@ class _EtiquetasScreenState extends State<EtiquetasScreen> {
   }
 
   Widget _buildPdfPreview(BuildContext context) {
-    // Calcular o fator de escala baseado no tamanho A4
     final pageWidth = PdfPageFormat.a4.width;
     final scaleFactor = MediaQuery.of(context).size.width / pageWidth;
     
     return PdfPreview(
+      key: ValueKey('preview_${_selectedEtiqueta?.nome}_${_tipoEtiqueta}_${_previewKey}'),
       build: (format) => _gerarPdf(mostrarBordasPreview: true),
       initialPageFormat: PdfPageFormat.a4,
-      maxPageWidth: pageWidth * scaleFactor, // Usar largura real do A4 escalada
+      maxPageWidth: pageWidth * scaleFactor,
       canChangeOrientation: false,
       canChangePageFormat: false,
       dynamicLayout: true,
@@ -777,6 +788,15 @@ class _EtiquetasScreenState extends State<EtiquetasScreen> {
         border: Border.all(color: Colors.grey.shade300),
         borderRadius: BorderRadius.circular(8),
       ),
+      onError: (context, error) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro ao gerar preview: $error'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return const Center(child: Text('Erro ao gerar preview'));
+      },
     );
   }
 

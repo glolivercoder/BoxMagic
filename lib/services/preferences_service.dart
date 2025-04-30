@@ -10,7 +10,9 @@ class PreferencesService {
   static const String _nextBoxIdKey = 'boxmagic_next_id';
   static const String _themeKey = 'boxmagic_theme';
   static const String _labelSizeKey = 'boxmagic_label_size';
-  static const String _lastModelKey = 'last_used_model';
+  static const String _lastModelKey = 'last_model_name';
+  static const String _lastFormatKey = 'last_format';
+  static const String _lastTypeKey = 'last_type';
 
   // Default categories
   static const List<String> _defaultCategories = [
@@ -123,5 +125,29 @@ class PreferencesService {
   Future<String?> getLastUsedModel() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString(_lastModelKey);
+  }
+
+  // Save last format
+  Future<void> saveLastFormat(String format) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_lastFormatKey, format);
+  }
+
+  // Get last format
+  Future<String?> getLastFormat() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_lastFormatKey);
+  }
+
+  // Save last type
+  Future<void> saveLastType(String type) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_lastTypeKey, type);
+  }
+
+  // Get last type
+  Future<String?> getLastType() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_lastTypeKey);
   }
 }
