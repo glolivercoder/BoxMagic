@@ -1,20 +1,23 @@
 import 'dart:typed_data';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:universal_html/html.dart' as html;
 import 'package:flutter/services.dart';
 import 'package:boxmagic/models/box.dart';
 import 'package:boxmagic/models/item.dart';
 import 'package:boxmagic/services/database_helper.dart';
-import 'package:boxmagic/services/preferences_service.dart';
-import 'package:boxmagic/services/log_service.dart';
 import 'package:boxmagic/services/label_printing_service.dart';
-import 'package:boxmagic/data/modelos_pimaco.dart' show modelosPimaco;
-import 'package:boxmagic/models/etiqueta.dart'; // Não importar modelosPimaco daqui
-import 'package:boxmagic/widgets/new_box_dialog.dart';
+import 'package:boxmagic/services/log_service.dart';
+import 'package:boxmagic/services/preferences_service.dart';
+import 'package:printing/printing.dart';
+import 'package:pdf/pdf.dart';
+import 'package:file_picker/file_picker.dart' as file_picker;
 import 'package:boxmagic/screens/box_detail_screen.dart';
 import 'package:boxmagic/screens/box_id_recognition_screen.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import 'package:pdf/pdf.dart';
-import 'package:printing/printing.dart';
+import 'package:boxmagic/data/modelos_pimaco.dart' show modelosPimaco;
+import 'package:boxmagic/models/etiqueta.dart'; // Não importar modelosPimaco daqui
+import 'package:boxmagic/widgets/new_box_dialog.dart';
 
 class BoxesScreen extends StatefulWidget {
   const BoxesScreen({super.key});
@@ -67,6 +70,16 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
         // Para modelos não suportados pelo serviço, retorna padrão
         return LabelPaperType.pimaco6180;
     }
+  }
+
+  // Método para escapar caracteres especiais em textos SVG
+  String _escapeSvgText(String text) {
+    return text
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&apos;');
   }
 
   // Construtor com referência estática
@@ -390,15 +403,26 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
                           );
                         }).toList(),
                         onChanged: (Etiqueta? value) {
-                          setState(() {
-                            if (value != null) {
-                              selectedPaperType = _mapModeloToPaperType(value);
-                              // Salvar último modelo usado
-                              _preferencesService.saveLastUsedLabelModel(value.nome);
-                              // Atualizar visualização prévia
-                              generatePreview(selectedBoxes, selectedFormat, selectedPaperType);
-                            }
-                          });
+                          if (value != null) {
+                            // Primeiro, mapear para o tipo de papel correto
+                            final newPaperType = _mapModeloToPaperType(value);
+                            
+                            // Salvar último modelo usado
+                            _preferencesService.saveLastUsedLabelModel(value.nome);
+                            
+                            // Log para debug
+                            _logService.debug('Modelo alterado para: ${value.nome}, Tipo: $newPaperType', category: 'preview');
+                            
+                            // Atualizar estado em uma única chamada para evitar loops
+                            setState(() {
+                              selectedPaperType = newPaperType;
+                              previewPdf = null;
+                              isGeneratingPreview = true;
+                            });
+                            
+                            // Gerar novo preview diretamente, sem delay
+                            generatePreview(selectedBoxes, selectedFormat, newPaperType);
+                          }
                         },
                       ),
                       const SizedBox(height: 20),
@@ -464,26 +488,190 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
                                                 ),
                                                 const SizedBox(width: 8),
                                                 ElevatedButton.icon(
-                                                  onPressed: () {
-                                                    // Exportar etiquetas para formato de texto compatível
-                                                    String exportText = '';
-                                                    for (final box in selectedBoxes) {
-                                                      exportText += '#${box.formattedId} - ${box.name}\n';
-                                                      exportText += '${box.category}\n\n';
-                                                    }
-                                                    
-                                                    // Copiar para a área de transferência
-                                                    Clipboard.setData(ClipboardData(text: exportText));
-                                                    
+                                                  onPressed: () async {
+                                                    // Mostrar indicador de progresso
                                                     ScaffoldMessenger.of(context).showSnackBar(
                                                       const SnackBar(
-                                                        content: Text('Etiquetas copiadas para a área de transferência'),
-                                                        backgroundColor: Colors.green,
+                                                        content: Text('Preparando arquivos SVG...'),
+                                                        duration: Duration(seconds: 1),
                                                       ),
                                                     );
+                                                    
+                                                    // Obter dimensões da etiqueta selecionada
+                                                    final Etiqueta selectedEtiqueta = modelosPimaco.firstWhere(
+                                                      (modelo) => _mapModeloToPaperType(modelo) == selectedPaperType,
+                                                      orElse: () => modelosPimaco.first,
+                                                    );
+                                                    
+                                                    // Converter dimensões para pixels (assumindo 96 DPI para SVG)
+                                                    final double labelWidthPx = selectedEtiqueta.larguraCm * 37.8; // 1cm = 37.8px em 96 DPI
+                                                    final double labelHeightPx = selectedEtiqueta.alturaCm * 37.8;
+                                                    
+                                                    // Criar uma lista para armazenar os conteúdos SVG e nomes de arquivos
+                                                    final List<Map<String, String>> svgFiles = [];
+                                                    
+                                                    // Gerar SVG para cada etiqueta
+                                                    for (int i = 0; i < selectedBoxes.length; i++) {
+                                                      final box = selectedBoxes[i];
+                                                      String svgContent = '';
+                                                      
+                                                      // Iniciar um novo documento SVG para cada etiqueta
+                                                      svgContent += '<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n';
+                                                      svgContent += '<!-- Etiqueta BoxMagic para Caixa #${box.formattedId} -->\n';
+                                                      svgContent += '<!-- Dimensões: ${selectedEtiqueta.larguraCm}cm x ${selectedEtiqueta.alturaCm}cm -->\n';
+                                                      svgContent += '<!-- Modelo: ${selectedEtiqueta.nome} -->\n';
+                                                      svgContent += '<svg xmlns="http://www.w3.org/2000/svg" width="${labelWidthPx.toStringAsFixed(2)}" height="${labelHeightPx.toStringAsFixed(2)}" viewBox="0 0 ${labelWidthPx.toStringAsFixed(2)} ${labelHeightPx.toStringAsFixed(2)}" version="1.1">\n';
+                                                      
+                                                      // Adicionar um retângulo de fundo
+                                                      svgContent += '  <rect x="0" y="0" width="${labelWidthPx.toStringAsFixed(2)}" height="${labelHeightPx.toStringAsFixed(2)}" fill="white" stroke="#cccccc" stroke-width="1" />\n';
+                                                      
+                                                      // Adicionar o ID da caixa
+                                                      svgContent += '  <text x="10" y="20" font-family="Arial" font-size="16" font-weight="bold" fill="black">#${box.formattedId}</text>\n';
+                                                      
+                                                      // Adicionar o nome da caixa
+                                                      svgContent += '  <text x="10" y="45" font-family="Arial" font-size="14" fill="black">${_escapeSvgText(box.name)}</text>\n';
+                                                      
+                                                      // Adicionar a categoria
+                                                      svgContent += '  <text x="10" y="65" font-family="Arial" font-size="12" fill="#666666">${_escapeSvgText(box.category)}</text>\n';
+                                                      
+                                                      // Espaço para o QR code
+                                                      final qrSize = labelHeightPx * 0.5;
+                                                      final qrX = labelWidthPx - qrSize - 10;
+                                                      final qrY = 10;
+                                                      svgContent += '  <rect x="${qrX.toStringAsFixed(2)}" y="${qrY.toStringAsFixed(2)}" width="${qrSize.toStringAsFixed(2)}" height="${qrSize.toStringAsFixed(2)}" fill="none" stroke="#999999" stroke-width="1" stroke-dasharray="5,5" />\n';
+                                                      svgContent += '  <text x="${(qrX + qrSize/2 - 30).toStringAsFixed(2)}" y="${(qrY + qrSize/2).toStringAsFixed(2)}" font-family="Arial" font-size="10" fill="#999999">QR Code</text>\n';
+                                                      
+                                                      // Buscar e incluir os objetos da caixa
+                                                      try {
+                                                        final items = await _databaseHelper.readItemsByBoxId(box.id!);
+                                                        if (items.isNotEmpty) {
+                                                          svgContent += '  <text x="10" y="85" font-family="Arial" font-size="12" font-weight="bold" fill="black">Objetos:</text>\n';
+                                                          
+                                                          for (int j = 0; j < items.length && j < 5; j++) { // Limitar a 5 itens para não sobrecarregar
+                                                            final item = items[j];
+                                                            String itemText = item.name;
+                                                            if (item.description != null && item.description!.isNotEmpty) {
+                                                              itemText += ' (${item.description})';
+                                                            }
+                                                            svgContent += '  <text x="10" y="${105 + j * 16}" font-family="Arial" font-size="10" fill="black">- ${_escapeSvgText(itemText)}</text>\n';
+                                                          }
+                                                          
+                                                          if (items.length > 5) {
+                                                            svgContent += '  <text x="10" y="${105 + 5 * 16}" font-family="Arial" font-size="10" fill="#666666">+ ${items.length - 5} mais itens...</text>\n';
+                                                          }
+                                                        }
+                                                      } catch (e) {
+                                                        svgContent += '  <text x="10" y="85" font-family="Arial" font-size="10" fill="red">Erro ao carregar objetos</text>\n';
+                                                      }
+                                                      
+                                                      // Fechar o SVG
+                                                      svgContent += '</svg>';
+                                                      
+                                                      // Adicionar à lista de arquivos
+                                                      svgFiles.add({
+                                                        'filename': 'etiqueta_${box.formattedId}.svg',
+                                                        'content': svgContent
+                                                      });
+                                                    }
+                                                    
+                                                    // Se não houver etiquetas, mostrar mensagem
+                                                    if (svgFiles.isEmpty) {
+                                                      if (mounted) {
+                                                        ScaffoldMessenger.of(context).showSnackBar(
+                                                          const SnackBar(
+                                                            content: Text('Nenhuma etiqueta selecionada para exportação'),
+                                                            backgroundColor: Colors.red,
+                                                          ),
+                                                        );
+                                                      }
+                                                      return;
+                                                    }
+                                                    
+                                                    try {
+                                                      // Verificar se estamos no ambiente web
+                                                      bool isWeb = identical(0, 0.0);
+                                                      
+                                                      if (isWeb) {
+                                                        // No ambiente web, vamos fazer download direto dos arquivos
+                                                        for (final svgFile in svgFiles) {
+                                                          // Usar universal_html para download no web
+                                                          final content = svgFile['content'] ?? '';
+                                                          final filename = svgFile['filename'] ?? 'etiqueta.svg';
+                                                          
+                                                          final blob = html.Blob([content], 'image/svg+xml');
+                                                          final url = html.Url.createObjectUrlFromBlob(blob);
+                                                          final anchor = html.AnchorElement(href: url)
+                                                            ..setAttribute('download', filename)
+                                                            ..click();
+                                                          html.Url.revokeObjectUrl(url);
+                                                          
+                                                          // Pequena pausa entre downloads para evitar bloqueio do navegador
+                                                          await Future.delayed(const Duration(milliseconds: 100));
+                                                        }
+                                                        
+                                                        if (mounted) {
+                                                          ScaffoldMessenger.of(context).showSnackBar(
+                                                            SnackBar(
+                                                              content: Text('${svgFiles.length} etiquetas SVG baixadas'),
+                                                              backgroundColor: Colors.green,
+                                                            ),
+                                                          );
+                                                        }
+                                                      } else {
+                                                        // Em dispositivos móveis/desktop, usar seleção de diretório
+                                                        final String? selectedDirectory = await file_picker.FilePicker.platform.getDirectoryPath(
+                                                          dialogTitle: 'Selecione a pasta para salvar as etiquetas SVG',
+                                                        );
+                                                        
+                                                        if (selectedDirectory == null) {
+                                                          // Usuário cancelou a seleção
+                                                          if (mounted) {
+                                                            ScaffoldMessenger.of(context).showSnackBar(
+                                                              const SnackBar(
+                                                                content: Text('Exportação cancelada'),
+                                                                backgroundColor: Colors.orange,
+                                                              ),
+                                                            );
+                                                          }
+                                                          return;
+                                                        }
+                                                        
+                                                        // Criar diretório se não existir
+                                                        final directory = Directory(selectedDirectory);
+                                                        if (!await directory.exists()) {
+                                                          await directory.create(recursive: true);
+                                                        }
+                                                        
+                                                        // Salvar cada arquivo SVG
+                                                        int savedCount = 0;
+                                                        for (final svgFile in svgFiles) {
+                                                          final file = File('${directory.path}/${svgFile['filename']}');
+                                                          await file.writeAsString(svgFile['content']!);
+                                                          savedCount++;
+                                                        }
+                                                        
+                                                        if (mounted) {
+                                                          ScaffoldMessenger.of(context).showSnackBar(
+                                                            SnackBar(
+                                                              content: Text('$savedCount etiquetas SVG salvas em ${directory.path}'),
+                                                              backgroundColor: Colors.green,
+                                                            ),
+                                                          );
+                                                        }
+                                                      }
+                                                    } catch (e) {
+                                                      if (mounted) {
+                                                        ScaffoldMessenger.of(context).showSnackBar(
+                                                          SnackBar(
+                                                            content: Text('Erro ao salvar arquivos SVG: $e'),
+                                                            backgroundColor: Colors.red,
+                                                          ),
+                                                        );
+                                                      }
+                                                    }
                                                   },
-                                                  icon: const Icon(Icons.copy),
-                                                  label: const Text('Exportar para Edição'),
+                                                  icon: const Icon(Icons.save_alt),
+                                                  label: const Text('Exportar SVG'),
                                                   style: ElevatedButton.styleFrom(
                                                     backgroundColor: Colors.amber[700],
                                                     foregroundColor: Colors.white,

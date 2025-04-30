@@ -47,11 +47,14 @@ class _ObjectRecognitionScreenState extends State<ObjectRecognitionScreen> {
     }
   }
 
+  String? _savedImagePath;
+
   Future<void> _takePhoto() async {
     setState(() {
       _imageFile = null;
       _objectInfo = null;
       _errorMessage = null;
+      _savedImagePath = null;
     });
 
     try {
@@ -66,6 +69,12 @@ class _ObjectRecognitionScreenState extends State<ObjectRecognitionScreen> {
           _imageFile = photo;
           _isProcessing = true;
         });
+
+        // Salvar a imagem no dispositivo
+        final savedImagePath = await _saveImageToDevice(photo);
+        if (savedImagePath != null) {
+          _savedImagePath = savedImagePath;
+        }
 
         // Analisar objeto
         final objectInfo = await _geminiService.analyzeObject(photo);
@@ -92,6 +101,67 @@ class _ObjectRecognitionScreenState extends State<ObjectRecognitionScreen> {
     }
   }
 
+  Future<String?> _saveImageToDevice(XFile image) async {
+    try {
+      // Verificar permissões
+      if (!kIsWeb) {
+        final status = await Permission.storage.request();
+        if (!status.isGranted) {
+          throw Exception('Permissão para armazenamento negada');
+        }
+      }
+
+      // Ler os bytes da imagem
+      final bytes = await image.readAsBytes();
+      
+      // Gerar nome de arquivo único baseado na data/hora
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final fileName = 'boxmagic_object_$timestamp.jpg';
+      
+      if (kIsWeb) {
+        // No ambiente web, não podemos salvar arquivos diretamente
+        return fileName; // Apenas retorna o nome do arquivo para referência
+      } else {
+        // Em dispositivos móveis, salvar na galeria
+        final result = await ImageGallerySaver.saveImage(
+          bytes,
+          name: fileName,
+          quality: 80,
+        );
+        
+        if (result['isSuccess']) {
+          // Em Android, o caminho pode estar em result['filePath']
+          // Em iOS, geralmente não temos acesso ao caminho real
+          final savedPath = result['filePath'] ?? fileName;
+          
+          // Mostrar mensagem de sucesso
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Imagem salva na galeria'),
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 1),
+              ),
+            );
+          }
+          
+          return savedPath;
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro ao salvar imagem: $e'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+    return null;
+  }
+
   Future<void> _saveObject() async {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedBoxId == null) {
@@ -107,6 +177,7 @@ class _ObjectRecognitionScreenState extends State<ObjectRecognitionScreen> {
       name: _nameController.text,
       category: _selectedCategory,
       description: _descriptionController.text.isEmpty ? null : _descriptionController.text,
+      image: _savedImagePath, // Incluir o caminho da imagem salva
       boxId: _selectedBoxId!,
       createdAt: now,
     );
@@ -115,8 +186,10 @@ class _ObjectRecognitionScreenState extends State<ObjectRecognitionScreen> {
       final savedItem = await _databaseHelper.createItem(newItem);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Objeto salvo com sucesso!'),
+          SnackBar(
+            content: Text(_savedImagePath != null 
+              ? 'Objeto e imagem salvos com sucesso!' 
+              : 'Objeto salvo com sucesso!'),
             backgroundColor: Colors.green,
           ),
         );

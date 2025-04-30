@@ -3,6 +3,7 @@ import 'package:boxmagic/models/box.dart';
 import 'package:boxmagic/models/item.dart';
 import 'package:boxmagic/services/log_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -46,82 +47,88 @@ class LabelPrintingService {
     required LabelPaperType paperType,
     bool isPreview = false,
   }) async {
-    _logService.info('Gerando PDF para impressão de etiquetas', category: 'printing');
-    _logService.debug('Formato: $format, Tipo de papel: $paperType', category: 'printing');
-    _logService.debug('Número de caixas: ${boxes.length}', category: 'printing');
+    try {
+      _logService.info('Gerando PDF para impressão de etiquetas', category: 'printing');
+      _logService.debug('Formato: $format, Tipo de papel: $paperType', category: 'printing');
+      _logService.debug('Número de caixas: ${boxes.length}', category: 'printing');
+      
+      // Criar documento PDF - usamos a fonte padrão
+      // Os avisos sobre Unicode são apenas informativos e não afetam a funcionalidade
+      final pdf = pw.Document();
+      
+      // Nota: Se os avisos "Helvetica has no Unicode support" incomodarem,
+      // podemos ignorar esses avisos, pois não afetam a funcionalidade básica
+      // para caracteres latinos comuns usados no Brasil.
 
-    // Criar documento PDF
-    final pdf = pw.Document();
+      // Definir tamanho da página e margens
+      final pageFormat = PdfPageFormat.a4;
 
-    // Definir tamanho da página e margens
-    final pageFormat = PdfPageFormat.a4;
+      // Definir dimensões da etiqueta com base no tipo de papel
+      double labelWidth;
+      double labelHeight;
+      int labelsPerRow;
+      int labelsPerColumn;
 
-    // Definir dimensões da etiqueta com base no tipo de papel
-    double labelWidth;
-    double labelHeight;
-    int labelsPerRow;
-    int labelsPerColumn;
+      switch (paperType) {
+        case LabelPaperType.pimaco6180:
+          labelWidth = pimaco6180Width;
+          labelHeight = pimaco6180Height;
+          labelsPerRow = pimaco6180LabelsPerRow;
+          labelsPerColumn = pimaco6180LabelsPerColumn;
+          break;
+        case LabelPaperType.pimaco6082:
+          labelWidth = pimaco6082Width;
+          labelHeight = pimaco6082Height;
+          labelsPerRow = pimaco6082LabelsPerRow;
+          labelsPerColumn = pimaco6082LabelsPerColumn;
+          break;
+        case LabelPaperType.a4Full:
+          labelWidth = pageFormat.width - 40;
+          labelHeight = pageFormat.height / 3 - 40;
+          labelsPerRow = 1;
+          labelsPerColumn = 3;
+          break;
+      }
 
-    switch (paperType) {
-      case LabelPaperType.pimaco6180:
-        labelWidth = pimaco6180Width;
-        labelHeight = pimaco6180Height;
-        labelsPerRow = pimaco6180LabelsPerRow;
-        labelsPerColumn = pimaco6180LabelsPerColumn;
-        break;
-      case LabelPaperType.pimaco6082:
-        labelWidth = pimaco6082Width;
-        labelHeight = pimaco6082Height;
-        labelsPerRow = pimaco6082LabelsPerRow;
-        labelsPerColumn = pimaco6082LabelsPerColumn;
-        break;
-      case LabelPaperType.a4Full:
-        labelWidth = pageFormat.width - 40;
-        labelHeight = pageFormat.height / 3 - 40;
-        labelsPerRow = 1;
-        labelsPerColumn = 3;
-        break;
-    }
+      // Calcular número de etiquetas por página
+      final labelsPerPage = labelsPerRow * labelsPerColumn;
 
-    // Calcular número de etiquetas por página
-    final labelsPerPage = labelsPerRow * labelsPerColumn;
+      // Calcular número de páginas necessárias
+      final numPages = (boxes.length / labelsPerPage).ceil();
 
-    // Calcular número de páginas necessárias
-    final numPages = (boxes.length / labelsPerPage).ceil();
-
-    // Gerar QR codes para cada caixa
-    final Map<int, Uint8List> qrCodes = {};
-    for (final box in boxes) {
-      if (box.id != null) {
-        try {
-          final qrCode = await _generateQrCode(box.id.toString());
-          qrCodes[box.id!] = qrCode;
-        } catch (e) {
-          _logService.error('Erro ao gerar QR code para caixa ${box.id}', error: e, category: 'printing');
+      // Gerar QR codes para cada caixa
+      final Map<int, Uint8List> qrCodes = {};
+      for (final box in boxes) {
+        if (box.id != null) {
+          try {
+            final qrCode = await _generateQrCode(box.id.toString());
+            qrCodes[box.id!] = qrCode;
+          } catch (e) {
+            _logService.error('Erro ao gerar QR code para caixa ${box.id}', error: e, category: 'printing');
+          }
         }
       }
-    }
 
-    // Criar páginas
-    for (int pageIndex = 0; pageIndex < numPages; pageIndex++) {
-      final startIndex = pageIndex * labelsPerPage;
-      final endIndex = (startIndex + labelsPerPage) < boxes.length
-          ? startIndex + labelsPerPage
-          : boxes.length;
+      // Criar páginas
+      for (int pageIndex = 0; pageIndex < numPages; pageIndex++) {
+        final startIndex = pageIndex * labelsPerPage;
+        final endIndex = (startIndex + labelsPerPage) < boxes.length
+            ? startIndex + labelsPerPage
+            : boxes.length;
 
-      pdf.addPage(
-        pw.Page(
-          pageFormat: pageFormat,
-          build: (pw.Context context) {
-            // Criar grid de etiquetas
-            return pw.Padding(
-              padding: const pw.EdgeInsets.all(10),
-              child: pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  for (int row = 0; row < labelsPerColumn; row++)
-                    pw.Padding(
-                      padding: const pw.EdgeInsets.only(bottom: 5),
+        pdf.addPage(
+          pw.Page(
+            pageFormat: pageFormat,
+            build: (pw.Context context) {
+              // Criar grid de etiquetas
+              return pw.Padding(
+                padding: const pw.EdgeInsets.all(10),
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    for (int row = 0; row < labelsPerColumn; row++)
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.only(bottom: 5),
                       child: pw.Row(
                         mainAxisAlignment: pw.MainAxisAlignment.start,
                         children: [
@@ -148,9 +155,13 @@ class LabelPrintingService {
           },
         ),
       );
-    }
+      }
 
-    return pdf.save();
+      return pdf.save();
+    } catch (e) {
+      _logService.error('Erro ao gerar PDF de etiquetas', error: e, category: 'printing');
+      rethrow; // Relançar o erro para ser tratado pelo chamador
+    }
   }
 
   // Construir widget de etiqueta
