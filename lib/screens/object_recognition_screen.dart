@@ -6,6 +6,8 @@ import 'package:boxmagic/models/item.dart';
 import 'package:boxmagic/services/database_helper.dart';
 import 'package:boxmagic/services/gemini_service.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:image_gallery_saver/image_gallery_saver.dart';
 
 class ObjectRecognitionScreen extends StatefulWidget {
   final List<Box> boxes;
@@ -100,22 +102,36 @@ class _ObjectRecognitionScreenState extends State<ObjectRecognitionScreen> {
 
     final now = DateTime.now().toIso8601String();
 
-    final newItem = Item(
-      name: _nameController.text,
-      category: _selectedCategory,
-      description: _descriptionController.text.isEmpty ? null : _descriptionController.text,
-      boxId: _selectedBoxId!,
-      createdAt: now,
-      // Em uma implementação completa, você salvaria a imagem e armazenaria o caminho aqui
-      // image: savedImagePath,
-    );
-
     try {
+      // Salvar a imagem na galeria
+      if (_imageFile != null) {
+        final bytes = await _imageFile!.readAsBytes();
+        final filename = 'boxmagic_item_${now.replaceAll(RegExp(r'[^0-9]'), '')}.jpg';
+        
+        if (!kIsWeb) {
+          final galleryPath = await getExternalStorageDirectory();
+          if (galleryPath != null) {
+            final imagePath = '${galleryPath.path}/$filename';
+            await File(imagePath).writeAsBytes(bytes);
+            await ImageGallerySaver.saveFile(imagePath);
+          }
+        }
+      }
+
+      final newItem = Item(
+        name: _nameController.text,
+        category: _selectedCategory,
+        description: _descriptionController.text.isEmpty ? null : _descriptionController.text,
+        boxId: _selectedBoxId!,
+        createdAt: now,
+        imagePath: _imageFile?.path, // Salvar o caminho da imagem
+      );
+
       final savedItem = await _databaseHelper.createItem(newItem);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Objeto salvo com sucesso!'),
+            content: Text('Objeto e foto salvos com sucesso!'),
             backgroundColor: Colors.green,
           ),
         );
@@ -125,7 +141,7 @@ class _ObjectRecognitionScreenState extends State<ObjectRecognitionScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erro ao salvar objeto: $e'),
+            content: Text('Erro ao salvar objeto ou foto: $e'),
             backgroundColor: Colors.red,
           ),
         );

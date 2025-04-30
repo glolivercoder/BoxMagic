@@ -7,6 +7,8 @@ import 'package:boxmagic/models/box.dart';
 import 'package:boxmagic/models/item.dart';
 import 'package:boxmagic/models/user.dart';
 import 'package:boxmagic/services/log_service.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:file_picker/file_picker.dart';
 
 class PersistenceService {
   static final PersistenceService _instance = PersistenceService._internal();
@@ -21,6 +23,7 @@ class PersistenceService {
   static const String _itemsKey = 'boxmagic_items_persistent';
   static const String _usersKey = 'boxmagic_users_persistent';
   static const String _lastSyncKey = 'boxmagic_last_sync';
+  static const String _backupDirPrefKey = 'backup_directory_path';
 
   // Pasta de backups - pasta fixa na raiz do projeto
   static const String _backupFolderName = 'backups';
@@ -557,6 +560,163 @@ class PersistenceService {
         category: 'persistence',
       );
       return result;
+    }
+  }
+
+  // Obter o diretório padrão de backup
+  Future<String> getDefaultBackupPath() async {
+    if (!kIsWeb) {
+      if (Platform.isAndroid) {
+        // Solicitar permissão de armazenamento
+        var status = await Permission.storage.status;
+        if (!status.isGranted) {
+          status = await Permission.storage.request();
+          if (!status.isGranted) {
+            throw Exception('Permissão de armazenamento negada');
+          }
+        }
+
+        // No Android, usar o diretório de documentos do app
+        final directory = await getExternalStorageDirectory();
+        if (directory != null) {
+          final backupDir = Directory('${directory.path}/BoxMagic/backups');
+          if (!await backupDir.exists()) {
+            await backupDir.create(recursive: true);
+          }
+          return backupDir.path;
+        }
+      }
+      // Em outros sistemas, usar o diretório de documentos
+      return (await getApplicationDocumentsDirectory()).path;
+    }
+    return 'web_storage';
+  }
+
+  // Obter o diretório atual de backup
+  Future<String> getBackupDirectoryPath() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_backupDirPrefKey) ?? await getDefaultBackupPath();
+  }
+
+  // Selecionar novo diretório de backup
+  Future<String?> selectBackupDirectory() async {
+    try {
+      if (kIsWeb) {
+        return null;
+      }
+
+      // No Android, verificar permissões
+      if (Platform.isAndroid) {
+        var status = await Permission.storage.status;
+        if (!status.isGranted) {
+          status = await Permission.storage.request();
+          if (!status.isGranted) {
+            throw Exception('Permissão de armazenamento negada');
+          }
+        }
+      }
+
+      // Abrir seletor de diretório
+      final String? selectedDirectory = await FilePicker.platform.getDirectoryPath(
+        dialogTitle: 'Selecione a pasta para backups',
+        initialDirectory: await getBackupDirectoryPath(),
+      );
+
+      if (selectedDirectory != null) {
+        // Verificar se o diretório é gravável
+        final testDir = Directory(selectedDirectory);
+        if (!await testDir.exists()) {
+          await testDir.create(recursive: true);
+        }
+
+        // Salvar o novo caminho
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(_backupDirPrefKey, selectedDirectory);
+
+        _logService.info('Novo diretório de backup definido: $selectedDirectory', category: 'persistence');
+        return selectedDirectory;
+      }
+    } catch (e) {
+      _logService.error('Erro ao selecionar diretório de backup', error: e, category: 'persistence');
+      rethrow;
+    }
+    return null;
+  }
+
+  // Criar arquivo de backup
+  Future<String?> createBackupFile(List<dynamic> boxes, List<dynamic> items, List<dynamic> users) async {
+    try {
+      final backupDir = await getBackupDirectoryPath();
+      if (kIsWeb) {
+        // No ambiente web, retornar o JSON direto
+        final backupData = {
+          'timestamp': DateTime.now().toIso8601String(),
+          'boxes': boxes,
+          'items': items,
+          'users': users,
+        };
+        return 'BOXMAGIC_BACKUP_JSON:${jsonEncode(backupData)}';
+      }
+
+      // Em dispositivos móveis, salvar arquivo físico
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final fileName = 'boxmagic_backup_$timestamp.json';
+      final file = File('$backupDir/$fileName');
+
+      final backupData = {
+        'timestamp': DateTime.now().toIso8601String(),
+        'boxes': boxes,
+        'items': items,
+        'users': users,
+      };
+
+      await file.writeAsString(jsonEncode(backupData));
+      _logService.info('Backup criado em: ${file.path}', category: 'persistence');
+
+      // Atualizar data do último backup
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('last_backup_time', DateTime.now().toIso8601String());
+
+      return file.path;
+    } catch (e) {
+      _logService.error('Erro ao criar arquivo de backup', error: e, category: 'persistence');
+      return null;
+    }
+  }
+
+  // Listar backups disponíveis
+  Future<List<Map<String, dynamic>>> listBackups() async {
+    try {
+      final backupDir = await getBackupDirectoryPath();
+      if (kIsWeb) return [];
+
+      final dir = Directory(backupDir);
+      if (!await dir.exists()) return [];
+
+      final List<Map<String, dynamic>> backups = [];
+      await for (final entity in dir.list()) {
+        if (entity is File && entity.path.endsWith('.json')) {
+          try {
+            final content = await entity.readAsString();
+            final data = jsonDecode(content);
+            backups.add({
+              'path': entity.path,
+              'timestamp': data['timestamp'],
+              'boxes': (data['boxes'] as List?)?.length ?? 0,
+              'items': (data['items'] as List?)?.length ?? 0,
+            });
+          } catch (e) {
+            _logService.warning('Erro ao ler backup: ${entity.path}', error: e, category: 'persistence');
+          }
+        }
+      }
+
+      // Ordenar por data, mais recente primeiro
+      backups.sort((a, b) => b['timestamp'].compareTo(a['timestamp']));
+      return backups;
+    } catch (e) {
+      _logService.error('Erro ao listar backups', error: e, category: 'persistence');
+      return [];
     }
   }
 }

@@ -38,24 +38,40 @@ class GeminiService {
   // Reconhecer ID de caixa a partir de uma imagem
   Future<String?> recognizeBoxId(XFile imageFile) async {
     try {
+      if (!_isInitialized) await _initialize();
+
       _logService.info('Iniciando reconhecimento de ID de caixa', category: 'gemini');
       _logService.debug('Arquivo de imagem: ${imageFile.path}', category: 'gemini');
 
-      // PROMPT MELHORADO PARA GEMINI (para uso futuro com API real):
-      // "Analise a imagem e identifique se há algum QR Code ou número de identificação de caixa escrito à mão (ex: 1001, 1002, etc). 
-      // Se encontrar um QR Code, extraia o valor e retorne o tipo 'qr_code'.
-      // Se encontrar um número escrito à mão, extraia o valor e retorne o tipo 'handwritten'.
-      // Responda apenas com um JSON válido no formato:
-      // { "type": "qr_code" | "handwritten", "value": "<id ou valor lido>" }
-      // Se não encontrar nada, responda { "type": "none", "value": "" }
-      // Não inclua nenhum texto extra além do JSON."
+      final bytes = await imageFile.readAsBytes();
+      final base64Image = base64Encode(bytes);
 
-      // Simular o reconhecimento (em um app real, usaríamos a API do Gemini)
-      // Retornar um ID aleatório entre 1001 e 1010 para simular o reconhecimento
-      final simulatedId = 1000 + (DateTime.now().millisecondsSinceEpoch % 10) + 1;
+      final prompt = '''
+      Analise esta imagem e procure APENAS um número de identificação de caixa com exatamente 4 dígitos.
+      O número deve estar claramente visível na imagem, seja impresso ou escrito à mão.
+      Se encontrar mais de um número, retorne apenas o que tiver mais certeza que é um ID de caixa.
+      Se não encontrar um número com exatamente 4 dígitos ou não tiver certeza, retorne null.
+      
+      Responda apenas com o número encontrado ou null, sem explicações adicionais.
+      ''';
 
-      _logService.info('ID reconhecido: $simulatedId', category: 'gemini');
-      return simulatedId.toString();
+      final content = [
+        Content.text(prompt),
+        Content.image(base64Image),
+      ];
+
+      final response = await model.generateContent(content);
+      final responseText = response.text.trim();
+
+      // Verificar se a resposta é um número válido com exatamente 4 dígitos
+      if (RegExp(r'^\d{4}$').hasMatch(responseText)) {
+        _logService.info('ID de caixa reconhecido: $responseText', category: 'gemini');
+        return responseText;
+      } else {
+        _logService.info('Nenhum ID de caixa válido encontrado na imagem', category: 'gemini');
+        return null;
+      }
+
     } catch (e, stackTrace) {
       _logService.error(
         'Erro ao reconhecer ID da caixa',
