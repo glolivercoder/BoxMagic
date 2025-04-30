@@ -10,6 +10,7 @@ class PreferencesService {
   static const String _nextBoxIdKey = 'boxmagic_next_id';
   static const String _themeKey = 'boxmagic_theme';
   static const String _labelSizeKey = 'boxmagic_label_size';
+  static const String _lastModelKey = 'last_used_model';
 
   // Default categories
   static const List<String> _defaultCategories = [
@@ -110,5 +111,17 @@ class PreferencesService {
   Future<bool> saveLabelSize(String size) async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.setString(_labelSizeKey, size);
+  }
+
+  // Save last used model
+  Future<void> saveLastUsedModel(String modelName) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_lastModelKey, modelName);
+  }
+
+  // Get last used model
+  Future<String?> getLastUsedModel() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_lastModelKey);
   }
 }

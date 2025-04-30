@@ -110,14 +110,14 @@ class _MainScreenState extends State<MainScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        toolbarHeight: 80,
+        toolbarHeight: 100,
         leading: Padding(
-          padding: EdgeInsets.zero,
+          padding: const EdgeInsets.all(8.0),
           child: Image.asset(
-            'assets/magicbox_mascot.png',
+            'Fotos de icones/magicbox_mascot .png',
             fit: BoxFit.contain,
-            height: 80,
-            width: 80,
+            width: 84,
+            height: 84,
           ),
         ),
         title: const Text(

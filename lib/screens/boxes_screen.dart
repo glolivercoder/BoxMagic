@@ -238,356 +238,385 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
       return;
     }
 
+    // Lista de caixas selecionadas para impressão
+    final selectedBoxes = <int>[];
 
-  // Lista de caixas selecionadas para impressão
-  final selectedBoxes = <int>[];
+    // Formato de etiqueta selecionado
+    var selectedFormat = LabelFormat.nameWithBarcodeAndId;
 
-  // Formato de etiqueta selecionado
-  var selectedFormat = LabelFormat.nameWithBarcodeAndId;
+    // Carregar o último modelo usado
+    final preferencesService = PreferencesService();
+    final lastModelName = await preferencesService.getLastUsedModel();
+    
+    // Modelo Pimaco selecionado
+    Etiqueta? selectedModelo = lastModelName != null 
+        ? modelosPimaco.firstWhere(
+            (e) => e.nome == lastModelName,
+            orElse: () => modelosPimaco.first)
+        : modelosPimaco.first;
+    
+    bool memorizeLastModel = lastModelName != null;
+    bool customExpanded = false;
+    Etiqueta customModelo = Etiqueta(
+      nome: 'Personalizada',
+      alturaCm: 5.0,
+      larguraCm: 10.0,
+      etiquetasPorFolha: 10,
+      margemSuperiorCm: 1.0,
+      margemInferiorCm: 1.0,
+      margemEsquerdaCm: 1.0,
+      margemDireitaCm: 1.0,
+      espacoEntreEtiquetasCm: 0.2,
+      personalizada: true,
+    );
 
-  // Modelo Pimaco selecionado
-  Etiqueta? selectedModelo = modelosPimaco.isNotEmpty ? modelosPimaco.first : null;
-  bool customExpanded = false;
-  Etiqueta customModelo = Etiqueta(
-    nome: 'Personalizada',
-    alturaCm: 5.0,
-    larguraCm: 10.0,
-    etiquetasPorFolha: 10,
-    margemSuperiorCm: 1.0,
-    margemInferiorCm: 1.0,
-    margemEsquerdaCm: 1.0,
-    margemDireitaCm: 1.0,
-    espacoEntreEtiquetasCm: 0.2,
-    personalizada: true,
-  );
-
-  await showDialog(
-    context: context,
-    builder: (context) => StatefulBuilder(
-      builder: (context, setState) => AlertDialog(
-        title: const Text('Imprimir Etiquetas'),
-        content: SizedBox(
-          width: double.maxFinite,
-          height: MediaQuery.of(context).size.height * 0.8,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Selecione as caixas para imprimir etiquetas:'),
-              const SizedBox(height: 16),
-              Expanded(
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: _boxes.length,
-                  itemBuilder: (context, index) {
-                    final box = _boxes[index];
-                    return CheckboxListTile(
-                      title: Row(
-                        children: [
-                          Expanded(child: Text(box.name)),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 2.0),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).primaryColor,
-                              borderRadius: BorderRadius.circular(4.0),
-                            ),
-                            child: Text(
-                              '#${box.formattedId}',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12.0,
+    await showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Imprimir Etiquetas'),
+          content: SizedBox(
+            width: double.maxFinite,
+            height: MediaQuery.of(context).size.height * 0.8,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Selecione as caixas para imprimir etiquetas:'),
+                const SizedBox(height: 8),
+                // Lista de caixas com checkbox
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: _boxes.length,
+                    itemBuilder: (context, index) {
+                      final box = _boxes[index];
+                      return CheckboxListTile(
+                        title: Text(box.name),
+                        subtitle: Text('#${box.formattedId}'),
+                        value: selectedBoxes.contains(box.id),
+                        onChanged: (checked) {
+                          setState(() {
+                            if (checked!) {
+                              selectedBoxes.add(box.id!);
+                            } else {
+                              selectedBoxes.remove(box.id!);
+                            }
+                          });
+                        },
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Modelo de etiqueta Pimaco:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<Etiqueta>(
+                  value: selectedModelo,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ),
+                  items: [
+                    ...modelosPimaco.map((modelo) => DropdownMenuItem(
+                          value: modelo,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                modelo.nome,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
                               ),
-                            ),
+                              Text(
+                                '${modelo.larguraCm.toStringAsFixed(1)}x${modelo.alturaCm.toStringAsFixed(1)}cm - ${modelo.etiquetasPorFolha} por folha',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-                      subtitle: Text(box.category),
-                      value: selectedBoxes.contains(box.id),
+                        )),
+                    DropdownMenuItem(
+                      value: customModelo,
+                      child: const Text('Personalizada'),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    setState(() {
+                      selectedModelo = value;
+                      customExpanded = value?.personalizada ?? false;
+                    });
+                  },
+                ),
+                
+                // Checkbox para memorizar último modelo
+                Row(
+                  children: [
+                    Checkbox(
+                      value: memorizeLastModel,
                       onChanged: (value) {
                         setState(() {
-                          if (value == true) {
-                            selectedBoxes.add(box.id!);
-                          } else {
-                            selectedBoxes.remove(box.id);
+                          memorizeLastModel = value ?? false;
+                          if (memorizeLastModel && selectedModelo != null) {
+                            preferencesService.saveLastUsedModel(selectedModelo!.nome);
                           }
                         });
                       },
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Formato da etiqueta:',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              DropdownButtonFormField<LabelFormat>(
-                value: selectedFormat,
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                ),
-                items: [
-                  DropdownMenuItem(
-                    value: LabelFormat.nameWithBarcodeAndId,
-                    child: Text('Nome da caixa + código de barras + ID'),
-                  ),
-                  DropdownMenuItem(
-                    value: LabelFormat.idWithBarcode,
-                    child: Text('Somente ID + código de barras'),
-                  ),
-                  DropdownMenuItem(
-                    value: LabelFormat.idWithBarcodeAndItems,
-                    child: Text('ID + código de barras + itens da caixa'),
-                  ),
-                ],
-                onChanged: (value) {
-                  setState(() {
-                    selectedFormat = value!;
-                  });
-                },
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Modelo de etiqueta Pimaco:',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              DropdownButtonFormField<Etiqueta>(
-                value: selectedModelo,
-                isExpanded: true,
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                ),
-                items: [
-                  ...modelosPimaco.map((modelo) => DropdownMenuItem(
-                        value: modelo,
-                        child: Text(modelo.nome),
-                      )),
-                  DropdownMenuItem(
-                    value: customModelo,
-                    child: const Text('Personalizada'),
-                  ),
-                ],
-                onChanged: (value) {
-                  setState(() {
-                    selectedModelo = value;
-                    customExpanded = value?.personalizada ?? false;
-                  });
-                },
-              ),
-              if (selectedModelo?.personalizada ?? false)
-                ExpansionTile(
-                  initiallyExpanded: true,
-                  title: const Text('Configurar modelo personalizado'),
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(8.0),
-                      child: Column(
-                        children: [
-                          Row(
-                            children: [
-                              Flexible(
-                                child: TextFormField(
-                                  initialValue: customModelo.alturaCm.toString(),
-                                  decoration: const InputDecoration(
-                                    labelText: 'Altura (cm)',
-                                    border: OutlineInputBorder(),
-                                  ),
-                                  keyboardType: TextInputType.numberWithOptions(decimal: true),
-                                  onChanged: (v) {
-                                    setState(() {
-                                      customModelo = customModelo.copyWith(
-                                        alturaCm: double.tryParse(v) ?? customModelo.alturaCm,
-                                      );
-                                    });
-                                  },
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Flexible(
-                                child: TextFormField(
-                                  initialValue: customModelo.larguraCm.toString(),
-                                  decoration: const InputDecoration(
-                                    labelText: 'Largura (cm)',
-                                    border: OutlineInputBorder(),
-                                  ),
-                                  keyboardType: TextInputType.numberWithOptions(decimal: true),
-                                  onChanged: (v) {
-                                    setState(() {
-                                      customModelo = customModelo.copyWith(
-                                        larguraCm: double.tryParse(v) ?? customModelo.larguraCm,
-                                      );
-                                    });
-                                  },
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              Flexible(
-                                child: TextFormField(
-                                  initialValue: customModelo.etiquetasPorFolha.toString(),
-                                  decoration: const InputDecoration(
-                                    labelText: 'Etiquetas por folha',
-                                    border: OutlineInputBorder(),
-                                  ),
-                                  keyboardType: TextInputType.number,
-                                  onChanged: (v) {
-                                    setState(() {
-                                      customModelo = customModelo.copyWith(
-                                        etiquetasPorFolha: int.tryParse(v) ?? customModelo.etiquetasPorFolha,
-                                      );
-                                    });
-                                  },
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Flexible(
-                                child: TextFormField(
-                                  initialValue: customModelo.espacoEntreEtiquetasCm.toString(),
-                                  decoration: const InputDecoration(
-                                    labelText: 'Espaço entre etiquetas (cm)',
-                                    border: OutlineInputBorder(),
-                                  ),
-                                  keyboardType: TextInputType.numberWithOptions(decimal: true),
-                                  onChanged: (v) {
-                                    setState(() {
-                                      customModelo = customModelo.copyWith(
-                                        espacoEntreEtiquetasCm: double.tryParse(v) ?? customModelo.espacoEntreEtiquetasCm,
-                                      );
-                                    });
-                                  },
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              Flexible(
-                                child: TextFormField(
-                                  initialValue: customModelo.margemSuperiorCm.toString(),
-                                  decoration: const InputDecoration(
-                                    labelText: 'Margem superior (cm)',
-                                    border: OutlineInputBorder(),
-                                  ),
-                                  keyboardType: TextInputType.numberWithOptions(decimal: true),
-                                  onChanged: (v) {
-                                    setState(() {
-                                      customModelo = customModelo.copyWith(
-                                        margemSuperiorCm: double.tryParse(v) ?? customModelo.margemSuperiorCm,
-                                      );
-                                    });
-                                  },
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Flexible(
-                                child: TextFormField(
-                                  initialValue: customModelo.margemEsquerdaCm.toString(),
-                                  decoration: const InputDecoration(
-                                    labelText: 'Margem esquerda (cm)',
-                                    border: OutlineInputBorder(),
-                                  ),
-                                  keyboardType: TextInputType.numberWithOptions(decimal: true),
-                                  onChanged: (v) {
-                                    setState(() {
-                                      customModelo = customModelo.copyWith(
-                                        margemEsquerdaCm: double.tryParse(v) ?? customModelo.margemEsquerdaCm,
-                                      );
-                                    });
-                                  },
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
                     ),
+                    const Text('Memorizar último modelo usado'),
                   ],
                 ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: selectedBoxes.isEmpty || selectedModelo == null
-                ? null
-                : () {
-                    Navigator.pop(context);
-                    final etiquetaParaImpressao = (selectedModelo?.personalizada ?? false)
-                        ? customModelo
-                        : selectedModelo!;
-                    _printLabelsComModelo(selectedBoxes, selectedFormat, etiquetaParaImpressao);
-                  },
-            child: const Text('Imprimir'),
-          ),
-        ],
-      ),
-    ),
-  );
-}
 
-// Novo método para impressão usando o modelo de etiqueta
-Future<void> _printLabelsComModelo(
+                // ...resto do código existente...
+                const SizedBox(height: 16),
+                const Text(
+                  'Formato da etiqueta:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<LabelFormat>(
+                  value: selectedFormat,
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ),
+                  items: [
+                    DropdownMenuItem(
+                      value: LabelFormat.nameWithBarcodeAndId,
+                      child: Text('Nome da caixa + código de barras + ID'),
+                    ),
+                    DropdownMenuItem(
+                      value: LabelFormat.idWithBarcode,
+                      child: Text('Somente ID + código de barras'),
+                    ),
+                    DropdownMenuItem(
+                      value: LabelFormat.idWithBarcodeAndItems,
+                      child: Text('ID + código de barras + itens da caixa'),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    setState(() {
+                      selectedFormat = value!;
+                    });
+                  },
+                ),
+                const SizedBox(height: 16),
+                if (selectedModelo?.personalizada ?? false)
+                  ExpansionTile(
+                    initiallyExpanded: true,
+                    title: const Text('Configurar modelo personalizado'),
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Column(
+                          children: [
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: TextFormField(
+                                    initialValue: customModelo.alturaCm.toString(),
+                                    decoration: const InputDecoration(
+                                      labelText: 'Altura (cm)',
+                                      border: OutlineInputBorder(),
+                                    ),
+                                    keyboardType: TextInputType.numberWithOptions(decimal: true),
+                                    onChanged: (v) {
+                                      setState(() {
+                                        customModelo = customModelo.copyWith(
+                                          alturaCm: double.tryParse(v) ?? customModelo.alturaCm,
+                                        );
+                                      });
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Flexible(
+                                  child: TextFormField(
+                                    initialValue: customModelo.larguraCm.toString(),
+                                    decoration: const InputDecoration(
+                                      labelText: 'Largura (cm)',
+                                      border: OutlineInputBorder(),
+                                    ),
+                                    keyboardType: TextInputType.numberWithOptions(decimal: true),
+                                    onChanged: (v) {
+                                      setState(() {
+                                        customModelo = customModelo.copyWith(
+                                          larguraCm: double.tryParse(v) ?? customModelo.larguraCm,
+                                        );
+                                      });
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: TextFormField(
+                                    initialValue: customModelo.etiquetasPorFolha.toString(),
+                                    decoration: const InputDecoration(
+                                      labelText: 'Etiquetas por folha',
+                                      border: OutlineInputBorder(),
+                                    ),
+                                    keyboardType: TextInputType.number,
+                                    onChanged: (v) {
+                                      setState(() {
+                                        customModelo = customModelo.copyWith(
+                                          etiquetasPorFolha: int.tryParse(v) ?? customModelo.etiquetasPorFolha,
+                                        );
+                                      });
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Flexible(
+                                  child: TextFormField(
+                                    initialValue: customModelo.espacoEntreEtiquetasCm.toString(),
+                                    decoration: const InputDecoration(
+                                      labelText: 'Espaço entre etiquetas (cm)',
+                                      border: OutlineInputBorder(),
+                                    ),
+                                    keyboardType: TextInputType.numberWithOptions(decimal: true),
+                                    onChanged: (v) {
+                                      setState(() {
+                                        customModelo = customModelo.copyWith(
+                                          espacoEntreEtiquetasCm: double.tryParse(v) ?? customModelo.espacoEntreEtiquetasCm,
+                                        );
+                                      });
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: TextFormField(
+                                    initialValue: customModelo.margemSuperiorCm.toString(),
+                                    decoration: const InputDecoration(
+                                      labelText: 'Margem superior (cm)',
+                                      border: OutlineInputBorder(),
+                                    ),
+                                    keyboardType: TextInputType.numberWithOptions(decimal: true),
+                                    onChanged: (v) {
+                                      setState(() {
+                                        customModelo = customModelo.copyWith(
+                                          margemSuperiorCm: double.tryParse(v) ?? customModelo.margemSuperiorCm,
+                                        );
+                                      });
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Flexible(
+                                  child: TextFormField(
+                                    initialValue: customModelo.margemEsquerdaCm.toString(),
+                                    decoration: const InputDecoration(
+                                      labelText: 'Margem esquerda (cm)',
+                                      border: OutlineInputBorder(),
+                                    ),
+                                    keyboardType: TextInputType.numberWithOptions(decimal: true),
+                                    onChanged: (v) {
+                                      setState(() {
+                                        customModelo = customModelo.copyWith(
+                                          margemEsquerdaCm: double.tryParse(v) ?? customModelo.margemEsquerdaCm,
+                                        );
+                                      });
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: selectedBoxes.isEmpty || selectedModelo == null
+                  ? null
+                  : () {
+                      Navigator.pop(context);
+                      final etiquetaParaImpressao = (selectedModelo?.personalizada ?? false)
+                          ? customModelo
+                          : selectedModelo!;
+                      _printLabelsComModelo(selectedBoxes, selectedFormat, etiquetaParaImpressao);
+                    },
+              child: const Text('Imprimir'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Novo método para impressão usando o modelo de etiqueta
+  Future<void> _printLabelsComModelo(
     List<int> boxIds,
     LabelFormat format,
     Etiqueta modeloSelecionado,
   ) async {
-  try {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Preparando etiquetas para impressão...'),
-        duration: Duration(seconds: 2),
-      ),
-    );
-
-    final selectedBoxes = _boxes.where((box) => box.id != null && boxIds.contains(box.id)).toList();
-    final boxItems = <int, List<Item>>{};
-    for (final boxId in boxIds) {
-      final items = await _databaseHelper.readItemsByBoxId(boxId);
-      boxItems[boxId] = items;
-    }
-
-    final printingService = LabelPrintingService();
-    await printingService.printLabels(
-      boxes: selectedBoxes,
-      boxItems: boxItems,
-      format: format,
-      paperType: _mapModeloToPaperType(modeloSelecionado),
-    );
-
-
-    if (mounted) {
+    try {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('${boxIds.length} etiquetas enviadas para impressão'),
-          backgroundColor: Colors.green,
+        const SnackBar(
+          content: Text('Preparando etiquetas para impressão...'),
+          duration: Duration(seconds: 2),
         ),
       );
-    }
-  } catch (e) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Erro ao imprimir etiquetas: $e'),
-          backgroundColor: Colors.red,
-        ),
+
+      final selectedBoxes = _boxes.where((box) => box.id != null && boxIds.contains(box.id)).toList();
+      final boxItems = <int, List<Item>>{};
+      for (final boxId in boxIds) {
+        final items = await _databaseHelper.readItemsByBoxId(boxId);
+        boxItems[boxId] = items;
+      }
+
+      final printingService = LabelPrintingService();
+      await printingService.printLabels(
+        boxes: selectedBoxes,
+        boxItems: boxItems,
+        format: format,
+        paperType: _mapModeloToPaperType(modeloSelecionado),
       );
+
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${boxIds.length} etiquetas enviadas para impressão'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro ao imprimir etiquetas: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
-}
-
 
   Future<void> _printLabels(
     List<int> boxIds,

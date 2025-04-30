@@ -12,6 +12,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../models/etiqueta.dart';
 import '../data/modelos_pimaco.dart';
+import '../services/preferences_service.dart';
 
 // Tipo de conteúdo da etiqueta
 enum TipoEtiqueta { idApenas, idENome, idNomeEConteudo }
@@ -26,12 +27,12 @@ class EtiquetasScreen extends StatefulWidget {
 class _EtiquetasScreenState extends State<EtiquetasScreen> {
   String _barcodeValue = '';
   bool _showBarcode = false;
+  bool _memorizeLastModel = false;
 
   Etiqueta? _selectedEtiqueta;
   bool _modoPersonalizado = false;
-
-  // Tipo de conteúdo da etiqueta
   TipoEtiqueta _tipoEtiqueta = TipoEtiqueta.idENome;
+  final PreferencesService _preferencesService = PreferencesService();
 
   // Controladores para os campos de texto
   final _alturaController = TextEditingController();
@@ -46,17 +47,31 @@ class _EtiquetasScreenState extends State<EtiquetasScreen> {
   @override
   void initState() {
     super.initState();
-    // Log dos modelos carregados
-    // ignore: avoid_print
-    print('Modelos carregados:');
-    for (final etiqueta in modelosPimaco) {
-      // ignore: avoid_print
-      print(' - ${etiqueta.nome}');
+    _loadPreferences();
+  }
+
+  Future<void> _loadPreferences() async {
+    final lastModelName = await _preferencesService.getLastUsedModel();
+    if (lastModelName != null) {
+      final model = modelosPimaco.firstWhere(
+        (e) => e.nome == lastModelName,
+        orElse: () => modelosPimaco.first,
+      );
+      setState(() {
+        _selectedEtiqueta = model;
+        _memorizeLastModel = true;
+      });
+    } else if (modelosPimaco.isNotEmpty) {
+      setState(() {
+        _selectedEtiqueta = modelosPimaco.first;
+      });
     }
-    // Selecionar o primeiro modelo por padrão
-    if (modelosPimaco.isNotEmpty) {
-      _selectedEtiqueta = modelosPimaco.first;
-      _atualizarControladores();
+    _atualizarControladores();
+  }
+
+  Future<void> _saveLastUsedModel() async {
+    if (_memorizeLastModel && _selectedEtiqueta != null) {
+      await _preferencesService.saveLastUsedModel(_selectedEtiqueta!.nome);
     }
   }
 
@@ -255,22 +270,7 @@ class _EtiquetasScreenState extends State<EtiquetasScreen> {
                     ),
                   ),
                   Expanded(
-                    child: PdfPreview(
-                      build: (format) => Future.value(bytes),
-                      allowPrinting: true,
-                      allowSharing: true,
-                      canChangePageFormat: false,
-                      canChangeOrientation: false,
-                      initialPageFormat: PdfPageFormat.a4,
-                      pdfFileName: 'Etiquetas_${_selectedEtiqueta!.nome}.pdf',
-                      previewPageMargin: const EdgeInsets.all(10),
-                      scrollViewDecoration: BoxDecoration(
-                        color: Colors.grey.shade200,
-                      ),
-                      maxPageWidth: PdfPageFormat.a4.width, // 595 pt = 21 cm
-                      actions: const [],
-                      useActions: false,
-                    ),
+                    child: _buildPdfPreview(context),
                   ),
                 ],
               ),
@@ -592,15 +592,16 @@ class _EtiquetasScreenState extends State<EtiquetasScreen> {
     final margemDireitaPt = etiqueta.margemDireitaCm * 28.35;
     final espacoEntreEtiquetasPt = etiqueta.espacoEntreEtiquetasCm * 28.35;
 
-    // Calcular o número de colunas e linhas
+    // Calcular o número de colunas e linhas na área útil
     final pageWidth = PdfPageFormat.a4.width;
     final pageHeight = PdfPageFormat.a4.height;
 
     final areaUtilWidth = pageWidth - margemEsquerdaPt - margemDireitaPt;
     final areaUtilHeight = pageHeight - margemSuperiorPt - margemInferiorPt;
 
-    final numColunas = (areaUtilWidth / (larguraPt + espacoEntreEtiquetasPt)).floor();
-    final numLinhas = (areaUtilHeight / (alturaPt + espacoEntreEtiquetasPt)).floor();
+    // Calcular número de etiquetas que cabem na horizontal e vertical
+    final numColunas = ((areaUtilWidth + espacoEntreEtiquetasPt) / (larguraPt + espacoEntreEtiquetasPt)).floor();
+    final numLinhas = ((areaUtilHeight + espacoEntreEtiquetasPt) / (alturaPt + espacoEntreEtiquetasPt)).floor();
 
     // Calcular o número de etiquetas por página
     final etiquetasPorPagina = numColunas * numLinhas;
@@ -623,136 +624,129 @@ class _EtiquetasScreenState extends State<EtiquetasScreen> {
       pdf.addPage(
         pw.Page(
           pageFormat: PdfPageFormat.a4,
-          margin: pw.EdgeInsets.zero, // Margem zero para desenhar a área total
+          margin: pw.EdgeInsets.zero,
           build: (context) {
             return pw.Stack(
               children: [
-                // Área de margem (visualização)
-                pw.Positioned(
-                  left: margemEsquerdaPt,
-                  top: margemSuperiorPt,
-                  child: pw.Container(
-                    width: pageWidth - margemEsquerdaPt - margemDireitaPt,
-                    height: pageHeight - margemSuperiorPt - margemInferiorPt,
+                if (mostrarBordasPreview) ...[
+                  // Área total da página
+                  pw.Container(
+                    width: pageWidth,
+                    height: pageHeight,
                     decoration: pw.BoxDecoration(
-                      border: pw.Border.all(
-                        color: PdfColors.red,
-                        width: 2,
+                      border: pw.Border.all(color: PdfColors.grey.shade(0.3)),
+                    ),
+                  ),
+                  // Área útil (dentro das margens)
+                  pw.Positioned(
+                    left: margemEsquerdaPt,
+                    top: margemSuperiorPt,
+                    child: pw.Container(
+                      width: areaUtilWidth,
+                      height: areaUtilHeight,
+                      decoration: pw.BoxDecoration(
+                        border: pw.Border.all(
+                          color: PdfColors.blue.shade(0.3),
+                          width: 0.5,
+                          style: pw.BorderStyle.dashed,
+                        ),
                       ),
                     ),
                   ),
-                ),
+                ],
+
                 // Grade de etiquetas
                 pw.Positioned(
                   left: margemEsquerdaPt,
                   top: margemSuperiorPt,
-                  child: pw.Container(
-                    width: pageWidth - margemEsquerdaPt - margemDireitaPt,
-                    height: pageHeight - margemSuperiorPt - margemInferiorPt,
-                    child: pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.start,
-                      children: List.generate(numLinhas, (linha) {
-                        return pw.Row(
-                          crossAxisAlignment: pw.CrossAxisAlignment.start,
-                          children: List.generate(numColunas, (coluna) {
-                            final index = linha * numColunas + coluna;
-                            // Verificar se ainda há etiquetas para mostrar
-                            if (index >= etiquetasNestaPagina) {
-                              return pw.SizedBox(
-                                width: larguraPt,
-                                height: alturaPt,
-                              );
-                            }
-                            // Obter os dados da caixa
-                            final caixaIndex = pagina * etiquetasPorPagina + index;
-                            if (caixaIndex >= caixas.length) {
-                              return pw.SizedBox(
-                                width: larguraPt,
-                                height: alturaPt,
-                              );
-                            }
-                            final caixa = caixas[caixaIndex];
-                            final caixaId = caixa['id'] as String;
-                            final caixaNome = caixa['nome'] as String;
-                            final caixaConteudo = caixa['conteudo'] as String;
-                            return pw.Padding(
-                              padding: pw.EdgeInsets.only(
+                  child: pw.Column(
+                    children: List.generate(numLinhas, (linha) {
+                      return pw.Row(
+                        children: List.generate(numColunas, (coluna) {
+                          final index = pagina * etiquetasPorPagina + linha * numColunas + coluna;
+                          if (index >= caixas.length) {
+                            // Etiqueta vazia (não será impressa)
+                            return pw.Container(
+                              width: larguraPt,
+                              height: alturaPt,
+                              margin: pw.EdgeInsets.only(
                                 right: coluna < numColunas - 1 ? espacoEntreEtiquetasPt : 0,
                                 bottom: linha < numLinhas - 1 ? espacoEntreEtiquetasPt : 0,
                               ),
-                              child: pw.Container(
-                                width: larguraPt,
-                                height: alturaPt,
-                                decoration: mostrarBordasPreview
-                                    ? pw.BoxDecoration(
-                                        border: pw.Border.all(color: PdfColors.black),
-                                      )
-                                    : null,
-                                child: pw.Padding(
-                                  padding: const pw.EdgeInsets.all(5),
-                                  child: pw.Column(
-                                    crossAxisAlignment: pw.CrossAxisAlignment.center,
-                                    mainAxisAlignment: pw.MainAxisAlignment.center,
-                                    children: [
-                                      // Código de barras (sempre presente)
-                                      pw.BarcodeWidget(
-                                        barcode: pw.Barcode.code128(),
-                                        data: caixaId,
-                                        width: larguraPt * 0.8,
-                                        height: 30,
-                                        drawText: true,
-                                        textStyle: pw.TextStyle(
-                                          font: ttf,
-                                          fontSize: 8,
-                                        ),
-                                      ),
-                                      pw.SizedBox(height: 5),
-                                      // ID da caixa (sempre presente)
-                                      pw.Text(
-                                        'ID: $caixaId',
-                                        style: pw.TextStyle(
-                                          font: ttf,
-                                          fontSize: 10,
-                                        ),
-                                      ),
-                                      // Nome da caixa (presente em idENome e idNomeEConteudo)
-                                      if (_tipoEtiqueta == TipoEtiqueta.idENome || _tipoEtiqueta == TipoEtiqueta.idNomeEConteudo) ...[
-                                        pw.SizedBox(height: 5),
-                                        pw.Text(
-                                          caixaNome,
-                                          style: pw.TextStyle(
-                                            font: ttf,
-                                            fontSize: 12,
-                                            fontWeight: pw.FontWeight.bold,
-                                          ),
-                                          textAlign: pw.TextAlign.center,
-                                        ),
-                                      ],
-                                      // Conteúdo da caixa (apenas em idNomeEConteudo)
-                                      if (_tipoEtiqueta == TipoEtiqueta.idNomeEConteudo && alturaPt > 100) ...[
-                                        pw.SizedBox(height: 5),
-                                        pw.Container(
-                                          width: larguraPt * 0.9,
-                                          child: pw.Text(
-                                            'Conteúdo: $caixaConteudo',
-                                            style: pw.TextStyle(
-                                              font: ttf,
-                                              fontSize: 8,
-                                            ),
-                                            textAlign: pw.TextAlign.center,
-                                            maxLines: 2,
-                                          ),
-                                        ),
-                                      ],
-                                    ],
-                                  ),
+                              decoration: mostrarBordasPreview ? pw.BoxDecoration(
+                                border: pw.Border.all(
+                                  color: PdfColors.grey.shade(0.3),
+                                  width: 0.5,
+                                  style: pw.BorderStyle.dashed,
                                 ),
-                              ),
+                              ) : null,
                             );
-                          }),
-                        );
-                      }),
-                    ),
+                          }
+
+                          // Etiqueta com conteúdo (será impressa)
+                          final dados = caixas[index];
+                          return pw.Container(
+                            width: larguraPt,
+                            height: alturaPt,
+                            margin: pw.EdgeInsets.only(
+                              right: coluna < numColunas - 1 ? espacoEntreEtiquetasPt : 0,
+                              bottom: linha < numLinhas - 1 ? espacoEntreEtiquetasPt : 0,
+                            ),
+                            decoration: pw.BoxDecoration(
+                              border: pw.Border.all(
+                                color: mostrarBordasPreview ? PdfColors.blue : PdfColors.transparent,
+                                width: 0.5,
+                              ),
+                            ),
+                            child: pw.Padding(
+                              padding: const pw.EdgeInsets.all(4),
+                              child: pw.Column(
+                                mainAxisAlignment: pw.MainAxisAlignment.center,
+                                children: [
+                                  // Código de barras
+                                  pw.BarcodeWidget(
+                                    barcode: pw.Barcode.code128(),
+                                    data: dados['id']!,
+                                    width: larguraPt * 0.8,
+                                    height: larguraPt * 0.2,
+                                    textStyle: pw.TextStyle(font: ttf, fontSize: 8),
+                                  ),
+                                  pw.SizedBox(height: 2),
+                                  // ID
+                                  pw.Text(
+                                    'ID: ${dados['id']}',
+                                    style: pw.TextStyle(font: ttf, fontSize: 8),
+                                  ),
+                                  if (_tipoEtiqueta != TipoEtiqueta.idApenas) ...[
+                                    pw.SizedBox(height: 2),
+                                    // Nome
+                                    pw.Text(
+                                      dados['nome']!,
+                                      style: pw.TextStyle(
+                                        font: ttf,
+                                        fontSize: 10,
+                                        fontWeight: pw.FontWeight.bold,
+                                      ),
+                                      textAlign: pw.TextAlign.center,
+                                    ),
+                                  ],
+                                  if (_tipoEtiqueta == TipoEtiqueta.idNomeEConteudo) ...[
+                                    pw.SizedBox(height: 2),
+                                    // Conteúdo
+                                    pw.Text(
+                                      dados['conteudo']!,
+                                      style: pw.TextStyle(font: ttf, fontSize: 7),
+                                      textAlign: pw.TextAlign.center,
+                                      maxLines: 2,
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          );
+                        }),
+                      );
+                    }),
                   ),
                 ),
               ],
@@ -760,127 +754,30 @@ class _EtiquetasScreenState extends State<EtiquetasScreen> {
           },
         ),
       );
-      // Calcular o número de etiquetas nesta página
-      final etiquetasRestantes = caixas.length - (pagina * etiquetasPorPagina);
-      final etiquetasNestaPagina = etiquetasRestantes > etiquetasPorPagina
-          ? etiquetasPorPagina
-          : etiquetasRestantes;
-
-      // Criar uma grade de etiquetas
-      return pw.Column(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: List.generate(numLinhas, (linha) {
-          return pw.Row(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: List.generate(numColunas, (coluna) {
-              final index = linha * numColunas + coluna;
-
-              // Verificar se ainda há etiquetas para mostrar
-              if (index >= etiquetasNestaPagina) {
-                return pw.SizedBox(
-                  width: larguraPt,
-                  height: alturaPt,
-                );
-              }
-
-              // Obter os dados da caixa
-              final caixaIndex = pagina * etiquetasPorPagina + index;
-              if (caixaIndex >= caixas.length) {
-                return pw.SizedBox(
-                  width: larguraPt,
-                  height: alturaPt,
-                );
-              }
-
-              final caixa = caixas[caixaIndex];
-              final caixaId = caixa['id'] as String;
-              final caixaNome = caixa['nome'] as String;
-              final caixaConteudo = caixa['conteudo'] as String;
-
-              return pw.Padding(
-                padding: pw.EdgeInsets.only(
-                  right: coluna < numColunas - 1 ? espacoEntreEtiquetasPt : 0,
-                  bottom: linha < numLinhas - 1 ? espacoEntreEtiquetasPt : 0,
-                ),
-                child: pw.Container(
-                  width: larguraPt,
-                  height: alturaPt,
-                  decoration: pw.BoxDecoration(
-                    border: pw.Border.all(color: PdfColors.black),
-                  ),
-                  child: pw.Padding(
-                    padding: const pw.EdgeInsets.all(5),
-                    child: pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.center,
-                      mainAxisAlignment: pw.MainAxisAlignment.center,
-                      children: [
-                        // Código de barras (sempre presente)
-                        pw.BarcodeWidget(
-                          barcode: pw.Barcode.code128(),
-                          data: caixaId,
-                          width: larguraPt * 0.8,
-                          height: 30,
-                          drawText: true,
-                          textStyle: pw.TextStyle(
-                            font: ttf,
-                            fontSize: 8,
-                          ),
-                        ),
-
-                        pw.SizedBox(height: 5),
-
-                        // ID da caixa (sempre presente)
-                        pw.Text(
-                          'ID: $caixaId',
-                          style: pw.TextStyle(
-                            font: ttf,
-                            fontSize: 10,
-                          ),
-                        ),
-
-                        // Nome da caixa (presente em idENome e idNomeEConteudo)
-                        if (_tipoEtiqueta == TipoEtiqueta.idENome ||
-                            _tipoEtiqueta == TipoEtiqueta.idNomeEConteudo) ...[
-                          pw.SizedBox(height: 5),
-                          pw.Text(
-                            caixaNome,
-                            style: pw.TextStyle(
-                              font: ttf,
-                              fontSize: 12,
-                              fontWeight: pw.FontWeight.bold,
-                            ),
-                            textAlign: pw.TextAlign.center,
-                          ),
-                        ],
-
-                        // Conteúdo da caixa (apenas em idNomeEConteudo)
-                        if (_tipoEtiqueta == TipoEtiqueta.idNomeEConteudo && alturaPt > 100) ...[
-                          pw.SizedBox(height: 5),
-                          pw.Container(
-                            width: larguraPt * 0.9,
-                            child: pw.Text(
-                              'Conteúdo: $caixaConteudo',
-                              style: pw.TextStyle(
-                                font: ttf,
-                                fontSize: 8,
-                              ),
-                              textAlign: pw.TextAlign.center,
-                              maxLines: 2,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            }),
-          );
-        }),
-      );
     }
 
     return pdf;
+  }
+
+  Widget _buildPdfPreview(BuildContext context) {
+    // Calcular o fator de escala baseado no tamanho A4
+    final pageWidth = PdfPageFormat.a4.width;
+    final scaleFactor = MediaQuery.of(context).size.width / pageWidth;
+    
+    return PdfPreview(
+      build: (format) => _gerarPdf(mostrarBordasPreview: true),
+      initialPageFormat: PdfPageFormat.a4,
+      maxPageWidth: pageWidth * scaleFactor, // Usar largura real do A4 escalada
+      canChangeOrientation: false,
+      canChangePageFormat: false,
+      dynamicLayout: true,
+      useActions: false,
+      padding: EdgeInsets.zero,
+      pdfPreviewPageDecoration: BoxDecoration(
+        border: Border.all(color: Colors.grey.shade300),
+        borderRadius: BorderRadius.circular(8),
+      ),
+    );
   }
 
   @override
@@ -893,6 +790,84 @@ class _EtiquetasScreenState extends State<EtiquetasScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Dropdown de modelo de etiqueta no topo
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Modelo de Etiqueta',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 8),
+                      DropdownButtonFormField<Etiqueta>(
+                        value: _selectedEtiqueta,
+                        isExpanded: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Modelo de Etiqueta',
+                          border: OutlineInputBorder(),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                        ),
+                        items: modelosPimaco.map((modelo) {
+                          return DropdownMenuItem<Etiqueta>(
+                            value: modelo,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  modelo.nome,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                                Text(
+                                  '${modelo.larguraCm.toStringAsFixed(1)}x${modelo.alturaCm.toStringAsFixed(1)}cm - ${modelo.etiquetasPorFolha} por folha',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          setState(() {
+                            _selectedEtiqueta = value;
+                            _modoPersonalizado = value?.personalizada ?? false;
+                            _atualizarControladores();
+                            if (_memorizeLastModel) {
+                              _saveLastUsedModel();
+                            }
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Checkbox(
+                            value: _memorizeLastModel,
+                            onChanged: (value) {
+                              setState(() {
+                                _memorizeLastModel = value ?? false;
+                                if (_memorizeLastModel) {
+                                  _saveLastUsedModel();
+                                }
+                              });
+                            },
+                          ),
+                          const Text('Memorizar último modelo usado'),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
               // Campo para digitar o valor do código de barras
               TextField(
                 decoration: const InputDecoration(
@@ -1264,6 +1239,30 @@ class _EtiquetasScreenState extends State<EtiquetasScreen> {
               ],
             ),
           ],
+        ),
+      ),
+      bottomNavigationBar: BottomAppBar(
+        child: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              ElevatedButton.icon(
+                onPressed: _previewPdf,
+                icon: const Icon(Icons.preview),
+                label: const Text('Visualizar'),
+              ),
+              ElevatedButton.icon(
+                onPressed: _imprimirPdf,
+                icon: const Icon(Icons.print),
+                label: const Text('Imprimir'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
