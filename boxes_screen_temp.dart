@@ -301,201 +301,198 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
           builder: (context, setState) {
             return AlertDialog(
               title: const Text('Imprimir Etiquetas'),
-              content: SizedBox(
-                width: double.maxFinite,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Selecione as caixas para imprimir:',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 10),
-                      Container(
-                        constraints: const BoxConstraints(maxHeight: 200),
-                        child: ListView.builder(
-                          shrinkWrap: true,
-                          itemCount: _boxes.length,
-                          itemBuilder: (context, index) {
-                            final box = _boxes[index];
-                            return CheckboxListTile(
-                              title: Text('#${box.formattedId} - ${box.name}'),
-                              subtitle: Text(box.category),
-                              value: selectedBoxMap[box.id] ?? false,
-                              onChanged: (bool? value) {
-                                setState(() {
-                                  selectedBoxMap[box.id!] = value!;
-                                  if (value) {
-                                    selectedBoxes.add(box);
-                                  } else {
-                                    selectedBoxes.removeWhere(
-                                        (b) => b.id == box.id);
-                                  }
-                                  // Atualizar visualização prévia
-                                  generatePreview(selectedBoxes, selectedFormat, selectedPaperType);
-                                });
-                              },
-                            );
-                          },
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      const Text(
-                        'Formato da etiqueta:',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 5),
-                      DropdownButtonFormField<LabelFormat>(
-                        value: selectedFormat,
-                        items: [
-                          const DropdownMenuItem(
-                            value: LabelFormat.nameWithBarcodeAndId,
-                            child: Text('Nome, código de barras e ID'),
-                          ),
-                          const DropdownMenuItem(
-                            value: LabelFormat.idWithBarcode,
-                            child: Text('Apenas ID e código de barras'),
-                          ),
-                          const DropdownMenuItem(
-                            value: LabelFormat.idWithBarcodeAndItems,
-                            child: Text('ID, código de barras e itens'),
-                          ),
-                        ],
-                        onChanged: (value) {
-                          setState(() {
-                            selectedFormat = value!;
-                            // Atualizar visualização prévia
-                            generatePreview(selectedBoxes, selectedFormat, selectedPaperType);
-                          });
-                        },
-                      ),
-                      const SizedBox(height: 20),
-                      const Text(
-                        'Modelo Pimaco:',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 5),
-                      // Dropdown para selecionar modelo Pimaco
-                      DropdownButtonFormField<Etiqueta>(
-                        value: modelosPimaco.first,
-                        items: modelosPimaco.map((modelo) {
-                          return DropdownMenuItem<Etiqueta>(
-                            value: modelo,
-                            child: Text(modelo.nome),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Selecione as caixas para imprimir:',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 10),
+                    Container(
+                      constraints: const BoxConstraints(maxHeight: 200),
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: _boxes.length,
+                        itemBuilder: (context, index) {
+                          final box = _boxes[index];
+                          return CheckboxListTile(
+                            title: Text('#${box.formattedId} - ${box.name}'),
+                            subtitle: Text(box.category),
+                            value: selectedBoxMap[box.id] ?? false,
+                            onChanged: (bool? value) {
+                              setState(() {
+                                selectedBoxMap[box.id!] = value!;
+                                if (value) {
+                                  selectedBoxes.add(box);
+                                } else {
+                                  selectedBoxes.removeWhere(
+                                      (b) => b.id == box.id);
+                                }
+                                // Atualizar visualização ao alterar seleção
+                                generatePreview(selectedBoxes, selectedFormat, selectedPaperType);
+                              });
+                            },
                           );
-                        }).toList(),
-                        onChanged: (Etiqueta? value) {
-                          setState(() {
-                            if (value != null) {
-                              selectedPaperType = _mapModeloToPaperType(value);
-                              // Atualizar visualização prévia
-                              generatePreview(selectedBoxes, selectedFormat, selectedPaperType);
-                            }
-                          });
                         },
                       ),
-                      const SizedBox(height: 20),
-                      const Text(
-                        'Visualização:',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 10),
-                      // Área de visualização prévia
-                      Container(
-                        height: 200,
-                        width: double.infinity,
-                        decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey),
-                          borderRadius: BorderRadius.circular(8),
+                    ),
+                    const SizedBox(height: 20),
+                    const Text(
+                      'Formato da etiqueta:',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<LabelFormat>(
+                      value: selectedFormat,
+                      items: [
+                        DropdownMenuItem(
+                          value: LabelFormat.nameWithBarcodeAndId,
+                          child: Text(
+                              'Nome + QR Code + ID (${selectedBoxes.length} etiquetas)'),
                         ),
-                        child: selectedBoxes.isNotEmpty
-                            ? Center(
-                                child: isGeneratingPreview
-                                    ? const CircularProgressIndicator()
-                                    : Container(
-                                        padding: const EdgeInsets.all(8),
+                        DropdownMenuItem(
+                          value: LabelFormat.idWithBarcode,
+                          child: Text(
+                              'Apenas ID + QR Code (${selectedBoxes.length} etiquetas)'),
+                        ),
+                        DropdownMenuItem(
+                          value: LabelFormat.idWithBarcodeAndItems,
+                          child: Text(
+                              'ID + QR Code + Itens (${selectedBoxes.length} etiquetas)'),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        setState(() {
+                          selectedFormat = value!;
+                          // Atualizar visualização ao alterar formato
+                          generatePreview(selectedBoxes, selectedFormat, selectedPaperType);
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 20),
+                    const Text(
+                      'Tipo de papel:',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<LabelPaperType>(
+                      value: selectedPaperType,
+                      items: [
+                        DropdownMenuItem(
+                          value: LabelPaperType.pimaco6180,
+                          child: Text(
+                              'Pimaco 6180 - Padrão Correios (${(selectedBoxes.length / 10).ceil()} páginas)'),
+                        ),
+                        DropdownMenuItem(
+                          value: LabelPaperType.pimaco6082,
+                          child: Text(
+                              'Pimaco 6082 - Pequenas (${(selectedBoxes.length / 28).ceil()} páginas)'),
+                        ),
+                        DropdownMenuItem(
+                          value: LabelPaperType.a4Full,
+                          child: Text(
+                              'Página A4 inteira (${(selectedBoxes.length / 3).ceil()} páginas)'),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        setState(() {
+                          selectedPaperType = value!;
+                          // Atualizar visualização ao alterar tipo de papel
+                          generatePreview(selectedBoxes, selectedFormat, selectedPaperType);
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 20),
+                    const Text(
+                      'Visualização prévia:',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 10),
+                    Container(
+                      height: 300,
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: isGeneratingPreview
+                          ? const Center(child: CircularProgressIndicator())
+                          : previewPdf != null
+                              ? GestureDetector(
+                                  onTap: () {
+                                    // Mostrar visualização em tela cheia ao tocar
+                                    Printing.layoutPdf(
+                                      onLayout: (_) => Future.value(previewPdf!),
+                                      name: 'Visualização de Etiquetas',
+                                    );
+                                  },
+                                  child: Stack(
+                                    alignment: Alignment.center,
+                                    children: [
+                                      // Mostrar uma mensagem de visualização
+                                      Container(
+                                        alignment: Alignment.center,
+                                        padding: const EdgeInsets.all(16),
                                         child: Column(
                                           mainAxisAlignment: MainAxisAlignment.center,
                                           children: [
-                                            Text(
-                                              '${selectedBoxes.length} etiquetas selecionadas',
-                                              style: const TextStyle(fontWeight: FontWeight.bold),
+                                            const Icon(Icons.preview, size: 48, color: Colors.grey),
+                                            const SizedBox(height: 16),
+                                            const Text(
+                                              'Etiquetas prontas para impressão',
+                                              style: TextStyle(fontSize: 16),
+                                              textAlign: TextAlign.center,
                                             ),
-                                            const SizedBox(height: 10),
-                                            ElevatedButton.icon(
-                                              onPressed: () async {
-                                                if (previewPdf == null) return;
-                                                
-                                                ScaffoldMessenger.of(context).showSnackBar(
-                                                  const SnackBar(content: Text('Abrindo visualização...')),
-                                                );
-                                                
-                                                // Pequeno atraso para garantir que o contexto esteja estável
-                                                Future.delayed(const Duration(milliseconds: 300), () async {
-                                                  try {
-                                                    if (mounted && previewPdf != null) {
-                                                      await Printing.layoutPdf(
-                                                        onLayout: (_) => previewPdf!,
-                                                        name: 'Etiquetas BoxMagic',
-                                                        format: PdfPageFormat.a4,
-                                                      );
-                                                    }
-                                                  } catch (e) {
-                                                    if (mounted) {
-                                                      ScaffoldMessenger.of(context).showSnackBar(
-                                                        SnackBar(content: Text('Erro ao abrir visualização: $e')),
-                                                      );
-                                                    }
-                                                  }
-                                                });
-                                              },
-                                              icon: const Icon(Icons.preview),
-                                              label: const Text('Visualizar PDF'),
+                                            const SizedBox(height: 8),
+                                            const Text(
+                                              'Toque para visualizar em tela cheia',
+                                              style: TextStyle(fontSize: 12, color: Colors.grey),
+                                              textAlign: TextAlign.center,
                                             ),
                                           ],
                                         ),
-                                      )
+                                      ),
+                                    ],
+                                  ),
                                 )
-                            : const Center(child: Text('Nenhuma etiqueta selecionada')),
-                      ),
-                      const SizedBox(height: 10),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Row(
-                            children: [
-                              Container(
-                                width: 16,
-                                height: 16,
-                                decoration: BoxDecoration(
-                                  border: Border.all(color: Colors.red, width: 2),
-                                  borderRadius: BorderRadius.circular(2),
-                                ),
+                              : const Center(child: Text('Nenhuma etiqueta selecionada')),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              width: 16,
+                              height: 16,
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Colors.red, width: 2),
                               ),
-                              const SizedBox(width: 4),
-                              const Text('Etiquetas ativas'),
-                            ],
-                          ),
-                          Row(
-                            children: [
-                              Container(
-                                width: 16,
-                                height: 16,
-                                decoration: BoxDecoration(
-                                  border: Border.all(color: Colors.grey, width: 2),
-                                  borderRadius: BorderRadius.circular(2),
-                                ),
+                            ),
+                            const SizedBox(width: 4),
+                            const Text('Etiquetas ativas'),
+                          ],
+                        ),
+                        Row(
+                          children: [
+                            Container(
+                              width: 16,
+                              height: 16,
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Colors.grey.shade300),
                               ),
-                              const SizedBox(width: 4),
-                              const Text('Etiquetas não utilizadas'),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+                            ),
+                            const SizedBox(width: 4),
+                            const Text('Etiquetas não utilizadas'),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
               actions: [
@@ -564,7 +561,7 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(' etiquetas enviadas para impressão'),
+            content: Text('${selectedBoxes.length} etiquetas enviadas para impressão'),
             backgroundColor: Colors.green,
           ),
         );
@@ -618,7 +615,7 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(' etiquetas enviadas para impressão'),
+            content: Text('${selectedBoxes.length} etiquetas enviadas para impressão'),
             backgroundColor: Colors.green,
           ),
         );

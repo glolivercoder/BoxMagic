@@ -44,6 +44,7 @@ class LabelPrintingService {
     required Map<int, List<Item>> boxItems,
     required LabelFormat format,
     required LabelPaperType paperType,
+    bool isPreview = false,
   }) async {
     _logService.info('Gerando PDF para impressão de etiquetas', category: 'printing');
     _logService.debug('Formato: $format, Tipo de papel: $paperType', category: 'printing');
@@ -136,6 +137,7 @@ class LabelPrintingService {
                               labelWidth,
                               labelHeight,
                               labelsPerRow,
+                              isPreview: isPreview,
                             ),
                         ],
                       ),
@@ -163,27 +165,35 @@ class LabelPrintingService {
     double labelWidth,
     double labelHeight,
     int labelsPerRow,
+    {bool isPreview = false}
   ) {
     final index = startIndex + row * labelsPerRow + col;
 
-    // Se não houver mais caixas, retornar um container vazio
+    // Se não houver mais caixas, retornar um container vazio ou com borda cinza no modo preview
     if (index >= boxes.length) {
       return pw.Container(
         width: labelWidth,
         height: labelHeight,
         margin: const pw.EdgeInsets.all(2),
+        decoration: isPreview ? pw.BoxDecoration(
+          border: pw.Border.all(width: 1, color: PdfColors.grey300),
+        ) : null,
       );
     }
 
     final box = boxes[index];
     final items = boxItems[box.id] ?? [];
 
+    // Definir a cor da borda baseada no modo preview
+    final borderColor = isPreview ? PdfColors.red : PdfColors.black;
+    final borderWidth = isPreview ? 2.0 : 1.0;
+    
     return pw.Container(
       width: labelWidth,
       height: labelHeight,
       margin: const pw.EdgeInsets.all(2),
       decoration: pw.BoxDecoration(
-        border: pw.Border.all(width: 1, color: PdfColors.black),
+        border: pw.Border.all(width: borderWidth, color: borderColor),
       ),
       padding: const pw.EdgeInsets.all(5),
       child: _buildLabelContent(box, items, format, qrCodes),
