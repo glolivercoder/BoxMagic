@@ -5,9 +5,9 @@ class CircularLogo extends StatelessWidget {
   final double size;
 
   const CircularLogo({
-    Key? key,
+    super.key,
     this.size = 100.0,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -44,9 +44,9 @@ class CircularLogoAvatar extends StatelessWidget {
   final double size;
 
   const CircularLogoAvatar({
-    Key? key,
+    super.key,
     this.size = 40.0,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

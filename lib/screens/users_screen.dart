@@ -4,7 +4,7 @@ import 'package:boxmagic/services/database_helper.dart';
 import 'package:boxmagic/widgets/new_user_dialog.dart';
 
 class UsersScreen extends StatefulWidget {
-  const UsersScreen({Key? key}) : super(key: key);
+  const UsersScreen({super.key});
 
   @override
   _UsersScreenState createState() => _UsersScreenState();

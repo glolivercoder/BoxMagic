@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ConfiguracoesScreen extends StatefulWidget {
-  const ConfiguracoesScreen({Key? key}) : super(key: key);
+  const ConfiguracoesScreen({super.key});
 
   @override
   State<ConfiguracoesScreen> createState() => _ConfiguracoesScreenState();

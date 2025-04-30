@@ -1,9 +1,7 @@
 import 'package:boxmagic/models/box.dart';
 import 'package:boxmagic/models/item.dart';
-import 'package:boxmagic/models/user.dart';
 import 'package:boxmagic/services/database_helper.dart';
 import 'package:boxmagic/services/log_service.dart';
-import 'package:flutter/foundation.dart';
 
 /// Serviço ORM (Object-Relational Mapping) para gerenciar a relação entre objetos e caixas
 /// 

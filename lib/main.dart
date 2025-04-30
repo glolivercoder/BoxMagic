@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:boxmagic/screens/main_screen.dart';
 import 'package:boxmagic/services/database_helper.dart';
 

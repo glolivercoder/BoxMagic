@@ -6,7 +6,7 @@ import 'package:boxmagic/services/preferences_service.dart';
 class EditBoxDialog extends StatefulWidget {
   final Box box;
 
-  const EditBoxDialog({Key? key, required this.box}) : super(key: key);
+  const EditBoxDialog({super.key, required this.box});
 
   @override
   _EditBoxDialogState createState() => _EditBoxDialogState();

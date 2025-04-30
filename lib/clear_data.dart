@@ -7,7 +7,7 @@ void main() async {
 }
 
 class ClearDataApp extends StatelessWidget {
-  const ClearDataApp({Key? key}) : super(key: key);
+  const ClearDataApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -22,7 +22,7 @@ class ClearDataApp extends StatelessWidget {
 }
 
 class ClearDataScreen extends StatefulWidget {
-  const ClearDataScreen({Key? key}) : super(key: key);
+  const ClearDataScreen({super.key});
 
   @override
   _ClearDataScreenState createState() => _ClearDataScreenState();
@@ -118,13 +118,13 @@ class _ClearDataScreenState extends State<ClearDataScreen> {
               const SizedBox(height: 20),
               ElevatedButton(
                 onPressed: _isClearing ? null : _clearData,
-                child: _isClearing
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text('LIMPAR DADOS AGORA'),
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
                   backgroundColor: Colors.red,
                 ),
+                child: _isClearing
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : const Text('LIMPAR DADOS AGORA'),
               ),
               const SizedBox(height: 20),
               const Text(

@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.boxmagic.boxmagic"
+    namespace = "com.boxmagic.app"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = "27.0.12077973"
 

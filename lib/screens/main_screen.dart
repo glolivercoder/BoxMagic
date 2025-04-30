@@ -7,7 +7,7 @@ import 'package:boxmagic/screens/logs_screen.dart';
 import 'package:boxmagic/services/log_service.dart';
 
 class MainScreen extends StatefulWidget {
-  const MainScreen({Key? key}) : super(key: key);
+  const MainScreen({super.key});
 
   @override
   _MainScreenState createState() => _MainScreenState();

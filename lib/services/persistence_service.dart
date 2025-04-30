@@ -592,12 +592,6 @@ class PersistenceService {
     return 'web_storage';
   }
 
-  // Obter o diretório atual de backup
-  Future<String> getBackupDirectoryPath() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_backupDirPrefKey) ?? await getDefaultBackupPath();
-  }
-
   // Selecionar novo diretório de backup
   Future<String?> selectBackupDirectory() async {
     try {
@@ -641,82 +635,5 @@ class PersistenceService {
       rethrow;
     }
     return null;
-  }
-
-  // Criar arquivo de backup
-  Future<String?> createBackupFile(List<dynamic> boxes, List<dynamic> items, List<dynamic> users) async {
-    try {
-      final backupDir = await getBackupDirectoryPath();
-      if (kIsWeb) {
-        // No ambiente web, retornar o JSON direto
-        final backupData = {
-          'timestamp': DateTime.now().toIso8601String(),
-          'boxes': boxes,
-          'items': items,
-          'users': users,
-        };
-        return 'BOXMAGIC_BACKUP_JSON:${jsonEncode(backupData)}';
-      }
-
-      // Em dispositivos móveis, salvar arquivo físico
-      final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final fileName = 'boxmagic_backup_$timestamp.json';
-      final file = File('$backupDir/$fileName');
-
-      final backupData = {
-        'timestamp': DateTime.now().toIso8601String(),
-        'boxes': boxes,
-        'items': items,
-        'users': users,
-      };
-
-      await file.writeAsString(jsonEncode(backupData));
-      _logService.info('Backup criado em: ${file.path}', category: 'persistence');
-
-      // Atualizar data do último backup
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('last_backup_time', DateTime.now().toIso8601String());
-
-      return file.path;
-    } catch (e) {
-      _logService.error('Erro ao criar arquivo de backup', error: e, category: 'persistence');
-      return null;
-    }
-  }
-
-  // Listar backups disponíveis
-  Future<List<Map<String, dynamic>>> listBackups() async {
-    try {
-      final backupDir = await getBackupDirectoryPath();
-      if (kIsWeb) return [];
-
-      final dir = Directory(backupDir);
-      if (!await dir.exists()) return [];
-
-      final List<Map<String, dynamic>> backups = [];
-      await for (final entity in dir.list()) {
-        if (entity is File && entity.path.endsWith('.json')) {
-          try {
-            final content = await entity.readAsString();
-            final data = jsonDecode(content);
-            backups.add({
-              'path': entity.path,
-              'timestamp': data['timestamp'],
-              'boxes': (data['boxes'] as List?)?.length ?? 0,
-              'items': (data['items'] as List?)?.length ?? 0,
-            });
-          } catch (e) {
-            _logService.warning('Erro ao ler backup: ${entity.path}', error: e, category: 'persistence');
-          }
-        }
-      }
-
-      // Ordenar por data, mais recente primeiro
-      backups.sort((a, b) => b['timestamp'].compareTo(a['timestamp']));
-      return backups;
-    } catch (e) {
-      _logService.error('Erro ao listar backups', error: e, category: 'persistence');
-      return [];
-    }
   }
 }

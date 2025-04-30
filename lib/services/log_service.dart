@@ -196,7 +196,7 @@ class LogService {
 
   void error(String message, {Object? error, StackTrace? stackTrace, String? category}) {
     final errorStr = error != null ? ': $error' : '';
-    final stackTraceStr = stackTrace != null ? stackTrace.toString() : null;
+    final stackTraceStr = stackTrace?.toString();
 
     // Adicionar informações do sistema para ajudar no diagnóstico
     final systemInfo = 'Platform: ${kIsWeb ? 'Web' : 'Native'}, '

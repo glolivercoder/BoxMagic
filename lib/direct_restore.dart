@@ -7,7 +7,7 @@ void main() async {
 }
 
 class DirectRestoreApp extends StatelessWidget {
-  const DirectRestoreApp({Key? key}) : super(key: key);
+  const DirectRestoreApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -22,7 +22,7 @@ class DirectRestoreApp extends StatelessWidget {
 }
 
 class DirectRestoreScreen extends StatefulWidget {
-  const DirectRestoreScreen({Key? key}) : super(key: key);
+  const DirectRestoreScreen({super.key});
 
   @override
   _DirectRestoreScreenState createState() => _DirectRestoreScreenState();
@@ -129,13 +129,13 @@ class _DirectRestoreScreenState extends State<DirectRestoreScreen> {
               const SizedBox(height: 20),
               ElevatedButton(
                 onPressed: _isRestoring ? null : _restoreData,
-                child: _isRestoring
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text('RESTAURAR DADOS AGORA'),
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
                   backgroundColor: Colors.red,
                 ),
+                child: _isRestoring
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : const Text('RESTAURAR DADOS AGORA'),
               ),
               const SizedBox(height: 20),
               const Text(

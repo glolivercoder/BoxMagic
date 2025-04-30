@@ -6,7 +6,7 @@ import 'package:boxmagic/services/preferences_service.dart';
 class NewBoxDialog extends StatefulWidget {
   final Function(Box)? onBoxCreated;
 
-  const NewBoxDialog({Key? key, this.onBoxCreated}) : super(key: key);
+  const NewBoxDialog({super.key, this.onBoxCreated});
 
   @override
   _NewBoxDialogState createState() => _NewBoxDialogState();

@@ -1,9 +1,7 @@
-import 'package:flutter/foundation.dart';
+import 'dart:convert';
 import 'package:image_picker/image_picker.dart';
 import 'package:boxmagic/services/log_service.dart';
-
 import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
 import 'package:google_generative_ai/google_generative_ai.dart';
 
 class GeminiService {
@@ -11,67 +9,93 @@ class GeminiService {
   factory GeminiService() => _instance;
 
   final LogService _logService = LogService();
+  static const String _apiKeyPrefKey = 'gemini_api_key';
+  GenerativeModel? _model;
+  bool _isInitialized = false;
 
   GeminiService._internal() {
     _logService.info('GeminiService inicializado', category: 'gemini');
+    _initialize();
   }
 
-  // Nota: Em uma implementação real, usaríamos a API do Gemini
-  // Esta é uma versão simulada para demonstração
+  Future<void> _initialize() async {
+    if (_isInitialized) return;
 
-  static const String _apiKeyPrefKey = 'gemini_api_key';
+    try {
+      final apiKey = await getApiKey();
+      _model = GenerativeModel(
+        model: 'gemini-pro-vision',
+        apiKey: apiKey,
+      );
+      _isInitialized = true;
+      _logService.info('GeminiService inicializado com sucesso', category: 'gemini');
+    } catch (e, stackTrace) {
+      _logService.error(
+        'Erro ao inicializar GeminiService',
+        error: e,
+        stackTrace: stackTrace,
+        category: 'gemini',
+      );
+    }
+  }
 
-  /// Recupera a chave da API Gemini salva nas preferências.
   Future<String> getApiKey() async {
     final prefs = await SharedPreferences.getInstance();
-    // Chave padrão do repositório (substitua pelo valor real, se necessário)
-    const String defaultApiKey = 'AIzaSyA...';
-    return prefs.getString(_apiKeyPrefKey) ?? defaultApiKey;
+    return prefs.getString(_apiKeyPrefKey) ?? '';
   }
 
-  /// Atualiza a chave da API Gemini nas preferências.
   Future<bool> updateApiKey(String apiKey) async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.setString(_apiKeyPrefKey, apiKey);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_apiKeyPrefKey, apiKey);
+      
+      // Reinicializar o modelo com a nova chave
+      _model = GenerativeModel(
+        model: 'gemini-pro-vision',
+        apiKey: apiKey,
+      );
+      
+      _logService.info('Chave da API Gemini atualizada com sucesso', category: 'gemini');
+      return true;
+    } catch (e, stackTrace) {
+      _logService.error(
+        'Erro ao atualizar chave da API Gemini',
+        error: e,
+        stackTrace: stackTrace,
+        category: 'gemini',
+      );
+      return false;
+    }
   }
 
-  // Reconhecer ID de caixa a partir de uma imagem
   Future<String?> recognizeBoxId(XFile imageFile) async {
     try {
       if (!_isInitialized) await _initialize();
+      if (_model == null) throw Exception('Modelo Gemini não inicializado');
 
       _logService.info('Iniciando reconhecimento de ID de caixa', category: 'gemini');
-      _logService.debug('Arquivo de imagem: ${imageFile.path}', category: 'gemini');
-
       final bytes = await imageFile.readAsBytes();
-      final base64Image = base64Encode(bytes);
-
-      final prompt = '''
-      Analise esta imagem e procure APENAS um número de identificação de caixa com exatamente 4 dígitos.
-      O número deve estar claramente visível na imagem, seja impresso ou escrito à mão.
-      Se encontrar mais de um número, retorne apenas o que tiver mais certeza que é um ID de caixa.
-      Se não encontrar um número com exatamente 4 dígitos ou não tiver certeza, retorne null.
-      
-      Responda apenas com o número encontrado ou null, sem explicações adicionais.
-      ''';
 
       final content = [
-        Content.text(prompt),
-        Content.image(base64Image),
+        Content.multi([
+          TextPart('Analise esta imagem e encontre um número de identificação de caixa com exatamente 4 dígitos. '
+                  'Retorne apenas o número encontrado, sem texto adicional. '
+                  'Se não encontrar um número de 4 dígitos, retorne "NÃO ENCONTRADO".'),
+          DataPart('image/jpeg', bytes),
+        ]),
       ];
 
-      final response = await model.generateContent(content);
-      final responseText = response.text.trim();
+      final response = await _model!.generateContent(content);
+      final text = response.text?.trim() ?? '';
 
-      // Verificar se a resposta é um número válido com exatamente 4 dígitos
-      if (RegExp(r'^\d{4}$').hasMatch(responseText)) {
-        _logService.info('ID de caixa reconhecido: $responseText', category: 'gemini');
-        return responseText;
+      final regex = RegExp(r'^\d{4}$');
+      if (regex.hasMatch(text)) {
+        _logService.info('ID da caixa reconhecido: $text', category: 'gemini');
+        return text;
       } else {
-        _logService.info('Nenhum ID de caixa válido encontrado na imagem', category: 'gemini');
+        _logService.warning('ID da caixa não encontrado na imagem', category: 'gemini');
         return null;
       }
-
     } catch (e, stackTrace) {
       _logService.error(
         'Erro ao reconhecer ID da caixa',
@@ -83,103 +107,51 @@ class GeminiService {
     }
   }
 
-  // Analisar objeto e gerar nome e descrição
-  Future<Map<String, String>?> analyzeObject(XFile imageFile) async {
+  Future<Map<String, dynamic>?> analyzeObject(XFile imageFile) async {
     try {
+      if (!_isInitialized) await _initialize();
+      if (_model == null) throw Exception('Modelo Gemini não inicializado');
+
       _logService.info('Iniciando análise de objeto', category: 'gemini');
-      _logService.debug('Arquivo de imagem: ${imageFile.path}', category: 'gemini');
-
-      final apiKey = await getApiKey();
-      if (apiKey.isEmpty) {
-        _logService.error('Chave da API Gemini não configurada', category: 'gemini');
-        return null;
-      }
-
-      final prompt = '''
-Analise a imagem de um produto.
-Retorne um JSON com os seguintes campos:
-- name: nome do produto identificado
-- description: uma breve descrição do produto, com no máximo 2 linhas
-
-Responda SOMENTE com um JSON válido.
-''';
-
-      // Carregar bytes da imagem
-      final imageBytes = await imageFile.readAsBytes();
-
-      // Usar o pacote google_generative_ai para enviar imagem e prompt
-      final model = GenerativeModel(
-        model: 'gemini-1.5-flash',
-        apiKey: apiKey,
-      );
+      final bytes = await imageFile.readAsBytes();
 
       final content = [
         Content.multi([
-          TextPart(prompt),
-          DataPart('image/jpeg', imageBytes),
+          TextPart('Analise esta imagem e descreva o objeto principal em formato JSON com os seguintes campos:\n'
+                  '- name: Nome do objeto em português (curto e preciso, máximo 3 palavras)\n'
+                  '- description: Descrição breve do objeto em português (máximo 100 caracteres)\n\n'
+                  'Retorne apenas o JSON, sem texto adicional.'),
+          DataPart('image/jpeg', bytes),
         ]),
       ];
 
-      _logService.info('Enviando requisição para Gemini API (análise de objeto)...', category: 'gemini');
-      print('[Gemini] Enviando requisição para Gemini API (análise de objeto)...');
-      GenerateContentResponse response;
-      try {
-        response = await model.generateContent(content);
-        _logService.info('Resposta recebida da Gemini API.', category: 'gemini');
-        _logService.debug('Conteúdo bruto da resposta Gemini: \'${response.text}\'', category: 'gemini');
-        print('[Gemini] Resposta recebida da Gemini API.');
-        print('[Gemini] Conteúdo bruto da resposta: ${response.text}');
-      } catch (e, stackTrace) {
-        _logService.error('Erro de conexão ou requisição à Gemini API', error: e, stackTrace: stackTrace, category: 'gemini');
-        print('[Gemini] Erro de conexão ou requisição à Gemini API: $e');
-        return null;
-      }
+      final response = await _model!.generateContent(content);
+      final text = response.text ?? '';
 
-      final text = response.text;
-      if (text == null || text.isEmpty) {
-        _logService.error('Resposta vazia da Gemini API', category: 'gemini');
-        print('[Gemini] Resposta vazia da Gemini API');
-        return null;
-      }
-
-      // Extrair JSON da resposta
-      Map<String, dynamic>? result;
       try {
-        // Pode haver texto extra, tentar extrair apenas o JSON
         final jsonStart = text.indexOf('{');
         final jsonEnd = text.lastIndexOf('}');
         if (jsonStart == -1 || jsonEnd == -1) {
-          _logService.error('JSON não encontrado na resposta da Gemini. Resposta completa: $text', category: 'gemini');
-          print('[Gemini] JSON não encontrado na resposta da Gemini. Resposta completa: $text');
-          throw Exception('JSON não encontrado na resposta');
+          throw FormatException('JSON não encontrado na resposta');
         }
+
         final jsonString = text.substring(jsonStart, jsonEnd + 1);
-        _logService.debug('JSON extraído da resposta Gemini: $jsonString', category: 'gemini');
-        print('[Gemini] JSON extraído da resposta: $jsonString');
-        result = jsonDecode(jsonString);
+        final jsonData = jsonDecode(jsonString);
+
+        final result = {
+          'name': jsonData['name'] ?? 'Objeto não identificado',
+          'description': jsonData['description'] ?? 'Sem descrição disponível',
+        };
+
+        _logService.info('Objeto analisado com sucesso: ${result['name']}', category: 'gemini');
+        return result;
       } catch (e) {
-        _logService.error('Erro ao extrair ou decodificar JSON da resposta Gemini: $e', category: 'gemini');
-        print('[Gemini] Erro ao extrair ou decodificar JSON da resposta Gemini: $e');
-        return null;
+        _logService.error('Erro ao processar resposta JSON', error: e, category: 'gemini');
+        return {
+          'name': 'Objeto não identificado',
+          'description': 'Não foi possível analisar o objeto na imagem.'
+        };
       }
-
-      // Garantir categoria Diversos
-      if (result == null) {
-        _logService.error('O JSON extraído da resposta Gemini é nulo', category: 'gemini');
-        return null;
-      }
-      final retorno = {
-        'name': result['name']?.toString() ?? '',
-        'description': result['description']?.toString() ?? '',
-      };
-
-
-
-      _logService.info('Objeto analisado: ${retorno['name']}', category: 'gemini');
-      _logService.debug('Detalhes do objeto: $retorno', category: 'gemini');
-      print('[Gemini] Objeto analisado: ${retorno['name']}');
-      print('[Gemini] Detalhes do objeto: $retorno');
-      return retorno;
     } catch (e, stackTrace) {
       _logService.error(
         'Erro ao analisar objeto',
@@ -191,29 +163,32 @@ Responda SOMENTE com um JSON válido.
     }
   }
 
-  // Reconhecer texto manuscrito (incluindo letras cursivas) em uma imagem
   Future<String?> recognizeHandwrittenText(XFile imageFile) async {
     try {
-      _logService.info('Iniciando reconhecimento de texto manuscrito', category: 'gemini');
-      _logService.debug('Arquivo de imagem: ${imageFile.path}', category: 'gemini');
+      if (!_isInitialized) await _initialize();
+      if (_model == null) throw Exception('Modelo Gemini não inicializado');
 
-      // Simular o reconhecimento de texto manuscrito
-      final simulatedTexts = [
-        'Lista de compras:\n1. Leite\n2. Pão\n3. Ovos\n4. Frutas',
-        'Reunião às 15:00 - Não esquecer!',
-        'Ligar para João - (11) 98765-4321',
-        'ID da caixa: 1234',
-        'Caixa de ferramentas #2567',
+      _logService.info('Iniciando reconhecimento de texto manuscrito', category: 'gemini');
+      final bytes = await imageFile.readAsBytes();
+
+      final content = [
+        Content.multi([
+          TextPart('Leia e transcreva qualquer texto manuscrito presente nesta imagem. '
+                  'Retorne apenas o texto encontrado, sem comentários adicionais.'),
+          DataPart('image/jpeg', bytes),
+        ]),
       ];
 
-      final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final randomIndex = timestamp % simulatedTexts.length;
-      final result = simulatedTexts[randomIndex];
+      final response = await _model!.generateContent(content);
+      final text = response.text?.trim();
 
-      _logService.info('Texto reconhecido', category: 'gemini');
-      _logService.debug('Texto: $result', category: 'gemini');
-
-      return result;
+      if (text != null && text.isNotEmpty) {
+        _logService.info('Texto manuscrito reconhecido com sucesso', category: 'gemini');
+        return text;
+      } else {
+        _logService.warning('Nenhum texto manuscrito encontrado', category: 'gemini');
+        return null;
+      }
     } catch (e, stackTrace) {
       _logService.error(
         'Erro ao reconhecer texto manuscrito',
@@ -224,7 +199,4 @@ Responda SOMENTE com um JSON válido.
       return null;
     }
   }
-
-  // Nota: Este método seria usado em uma implementação real com a API do Gemini
-  // para converter a imagem em bytes e enviá-la para a API
 }

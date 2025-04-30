@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:boxmagic/models/box.dart';
@@ -7,15 +8,16 @@ import 'package:boxmagic/services/database_helper.dart';
 import 'package:boxmagic/services/gemini_service.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:image_gallery_saver/image_gallery_saver.dart';
 
 class ObjectRecognitionScreen extends StatefulWidget {
   final List<Box> boxes;
   
   const ObjectRecognitionScreen({
-    Key? key,
+    super.key,
     required this.boxes,
-  }) : super(key: key);
+  });
 
   @override
   _ObjectRecognitionScreenState createState() => _ObjectRecognitionScreenState();
@@ -29,7 +31,7 @@ class _ObjectRecognitionScreenState extends State<ObjectRecognitionScreen> {
   XFile? _imageFile;
   bool _isProcessing = false;
   String? _errorMessage;
-  Map<String, String>? _objectInfo;
+  Map<String, dynamic>? _objectInfo;
   
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
@@ -67,13 +69,12 @@ class _ObjectRecognitionScreenState extends State<ObjectRecognitionScreen> {
 
         // Analisar objeto
         final objectInfo = await _geminiService.analyzeObject(photo);
-        
+
         if (objectInfo != null) {
           setState(() {
             _objectInfo = objectInfo;
             _nameController.text = objectInfo['name'] ?? '';
             _descriptionController.text = objectInfo['description'] ?? '';
-            _selectedCategory = objectInfo['category'];
             _isProcessing = false;
           });
         } else {
@@ -102,36 +103,20 @@ class _ObjectRecognitionScreenState extends State<ObjectRecognitionScreen> {
 
     final now = DateTime.now().toIso8601String();
 
+    final newItem = Item(
+      name: _nameController.text,
+      category: _selectedCategory,
+      description: _descriptionController.text.isEmpty ? null : _descriptionController.text,
+      boxId: _selectedBoxId!,
+      createdAt: now,
+    );
+
     try {
-      // Salvar a imagem na galeria
-      if (_imageFile != null) {
-        final bytes = await _imageFile!.readAsBytes();
-        final filename = 'boxmagic_item_${now.replaceAll(RegExp(r'[^0-9]'), '')}.jpg';
-        
-        if (!kIsWeb) {
-          final galleryPath = await getExternalStorageDirectory();
-          if (galleryPath != null) {
-            final imagePath = '${galleryPath.path}/$filename';
-            await File(imagePath).writeAsBytes(bytes);
-            await ImageGallerySaver.saveFile(imagePath);
-          }
-        }
-      }
-
-      final newItem = Item(
-        name: _nameController.text,
-        category: _selectedCategory,
-        description: _descriptionController.text.isEmpty ? null : _descriptionController.text,
-        boxId: _selectedBoxId!,
-        createdAt: now,
-        imagePath: _imageFile?.path, // Salvar o caminho da imagem
-      );
-
       final savedItem = await _databaseHelper.createItem(newItem);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Objeto e foto salvos com sucesso!'),
+            content: Text('Objeto salvo com sucesso!'),
             backgroundColor: Colors.green,
           ),
         );
@@ -141,7 +126,7 @@ class _ObjectRecognitionScreenState extends State<ObjectRecognitionScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erro ao salvar objeto ou foto: $e'),
+            content: Text('Erro ao salvar objeto: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -307,13 +292,13 @@ class _ObjectRecognitionScreenState extends State<ObjectRecognitionScreen> {
                       Center(
                         child: ElevatedButton(
                           onPressed: _saveObject,
-                          child: const Text('Salvar Objeto'),
                           style: ElevatedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 32,
                               vertical: 12,
                             ),
                           ),
+                          child: const Text('Salvar Objeto'),
                         ),
                       ),
                     ],

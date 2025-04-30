@@ -14,7 +14,7 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 
 class ItemsScreen extends StatefulWidget {
-  const ItemsScreen({Key? key}) : super(key: key);
+  const ItemsScreen({super.key});
 
   // Métodos públicos para serem chamados de fora
   void showNewBoxDialog(BuildContext context) async {

@@ -6,7 +6,7 @@ void main() {
 }
 
 class TestEtiquetasApp extends StatelessWidget {
-  const TestEtiquetasApp({Key? key}) : super(key: key);
+  const TestEtiquetasApp({super.key});
 
   @override
   Widget build(BuildContext context) {

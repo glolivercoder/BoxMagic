@@ -6,7 +6,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
 class LogsScreen extends StatefulWidget {
-  const LogsScreen({Key? key}) : super(key: key);
+  const LogsScreen({super.key});
 
   @override
   _LogsScreenState createState() => _LogsScreenState();
@@ -265,7 +265,7 @@ class _LogsScreenState extends State<LogsScreen> {
                               ...LogLevel.values.map((level) => DropdownMenuItem<LogLevel>(
                                 value: level,
                                 child: Text(level.toString().split('.').last.toUpperCase()),
-                              )).toList(),
+                              )),
                             ],
                             onChanged: (value) {
                               setState(() {
@@ -292,7 +292,7 @@ class _LogsScreenState extends State<LogsScreen> {
                               ..._categories.map((category) => DropdownMenuItem<String>(
                                 value: category,
                                 child: Text(category),
-                              )).toList(),
+                              )),
                             ],
                             onChanged: (value) {
                               setState(() {

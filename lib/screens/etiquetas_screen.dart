@@ -18,7 +18,7 @@ import '../services/preferences_service.dart';
 enum TipoEtiqueta { idApenas, idENome, idNomeEConteudo }
 
 class EtiquetasScreen extends StatefulWidget {
-  const EtiquetasScreen({Key? key}) : super(key: key);
+  const EtiquetasScreen({super.key});
 
   @override
   _EtiquetasScreenState createState() => _EtiquetasScreenState();
@@ -31,7 +31,7 @@ class _EtiquetasScreenState extends State<EtiquetasScreen> {
 
   Etiqueta? _selectedEtiqueta;
   bool _modoPersonalizado = false;
-  TipoEtiqueta _tipoEtiqueta = TipoEtiqueta.idENome;
+  final TipoEtiqueta _tipoEtiqueta = TipoEtiqueta.idENome;
   final PreferencesService _preferencesService = PreferencesService();
 
   // Controladores para os campos de texto
@@ -775,7 +775,7 @@ class _EtiquetasScreenState extends State<EtiquetasScreen> {
     final scaleFactor = MediaQuery.of(context).size.width / pageWidth;
     
     return PdfPreview(
-      key: ValueKey('preview_${_selectedEtiqueta?.nome}_${_tipoEtiqueta}_${_previewKey}'),
+      key: ValueKey('preview_${_selectedEtiqueta?.nome}_${_tipoEtiqueta}_$_previewKey'),
       build: (format) => _gerarPdf(mostrarBordasPreview: true),
       initialPageFormat: PdfPageFormat.a4,
       maxPageWidth: pageWidth * scaleFactor,

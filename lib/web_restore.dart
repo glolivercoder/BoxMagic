@@ -7,7 +7,7 @@ void main() async {
 }
 
 class RestoreApp extends StatelessWidget {
-  const RestoreApp({Key? key}) : super(key: key);
+  const RestoreApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -22,7 +22,7 @@ class RestoreApp extends StatelessWidget {
 }
 
 class RestoreScreen extends StatefulWidget {
-  const RestoreScreen({Key? key}) : super(key: key);
+  const RestoreScreen({super.key});
 
   @override
   _RestoreScreenState createState() => _RestoreScreenState();
@@ -105,12 +105,12 @@ class _RestoreScreenState extends State<RestoreScreen> {
               const SizedBox(height: 20),
               ElevatedButton(
                 onPressed: _isRestoring ? null : _restoreData,
-                child: _isRestoring
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text('Restaurar Dados'),
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
                 ),
+                child: _isRestoring
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : const Text('Restaurar Dados'),
               ),
             ],
           ),

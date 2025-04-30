@@ -13,7 +13,7 @@ import 'package:boxmagic/screens/box_id_recognition_screen.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 class BoxesScreen extends StatefulWidget {
-  const BoxesScreen({Key? key}) : super(key: key);
+  const BoxesScreen({super.key});
 
   // Métodos públicos para serem chamados de fora
   void showBarcodeScanner(BuildContext context) {

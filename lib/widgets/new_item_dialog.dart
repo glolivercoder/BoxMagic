@@ -16,11 +16,11 @@ class NewItemDialog extends StatefulWidget {
   final Item? editItem; // Item para edição (null para novo item)
 
   const NewItemDialog({
-    Key? key,
+    super.key,
     this.boxes,
     this.preselectedBoxId,
     this.editItem,
-  }) : super(key: key);
+  });
 
   @override
   _NewItemDialogState createState() => _NewItemDialogState();

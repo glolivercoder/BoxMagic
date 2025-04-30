@@ -15,10 +15,10 @@ class ReportScreen extends StatefulWidget {
   final List<Item> items;
 
   const ReportScreen({
-    Key? key,
+    super.key,
     required this.boxes,
     required this.items,
-  }) : super(key: key);
+  });
 
   @override
   _ReportScreenState createState() => _ReportScreenState();
@@ -28,8 +28,8 @@ class _ReportScreenState extends State<ReportScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _whatsappController = TextEditingController();
-  String _reportFormat = 'text'; // 'text' ou 'pdf'
-  bool _isGenerating = false;
+  final String _reportFormat = 'text'; // 'text' ou 'pdf'
+  final bool _isGenerating = false;
   String _reportContent = '';
 
   @override

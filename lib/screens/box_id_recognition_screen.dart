@@ -8,7 +8,7 @@ import 'package:boxmagic/screens/box_detail_screen.dart';
 import 'package:image_picker/image_picker.dart';
 
 class BoxIdRecognitionScreen extends StatefulWidget {
-  const BoxIdRecognitionScreen({Key? key}) : super(key: key);
+  const BoxIdRecognitionScreen({super.key});
 
   @override
   _BoxIdRecognitionScreenState createState() => _BoxIdRecognitionScreenState();

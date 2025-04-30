@@ -5,7 +5,7 @@ import 'package:boxmagic/services/database_helper.dart';
 class NewUserDialog extends StatefulWidget {
   final User? user;
 
-  const NewUserDialog({Key? key, this.user}) : super(key: key);
+  const NewUserDialog({super.key, this.user});
 
   @override
   _NewUserDialogState createState() => _NewUserDialogState();

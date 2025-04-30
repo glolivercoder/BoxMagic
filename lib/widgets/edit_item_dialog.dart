@@ -7,7 +7,7 @@ import 'package:boxmagic/services/preferences_service.dart';
 class EditItemDialog extends StatefulWidget {
   final Item item;
 
-  const EditItemDialog({Key? key, required this.item}) : super(key: key);
+  const EditItemDialog({super.key, required this.item});
 
   @override
   _EditItemDialogState createState() => _EditItemDialogState();

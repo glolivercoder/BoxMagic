@@ -11,7 +11,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 class BoxDetailScreen extends StatefulWidget {
   final Box box;
 
-  const BoxDetailScreen({Key? key, required this.box}) : super(key: key);
+  const BoxDetailScreen({super.key, required this.box});
 
   @override
   _BoxDetailScreenState createState() => _BoxDetailScreenState();

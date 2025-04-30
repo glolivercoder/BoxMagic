@@ -7,7 +7,7 @@ import 'package:boxmagic/screens/item_detail_screen.dart';
 import 'package:boxmagic/screens/box_detail_screen.dart';
 
 class SearchHeader extends StatefulWidget {
-  const SearchHeader({Key? key}) : super(key: key);
+  const SearchHeader({super.key});
 
   @override
   _SearchHeaderState createState() => _SearchHeaderState();
