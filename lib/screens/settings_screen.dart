@@ -27,7 +27,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final GeminiService _geminiService = GeminiService();
 
   bool _isDarkMode = false;
-  String _labelSize = 'correios';
   bool _isLoading = false;
   String _lastBackupDate = 'Nunca';
   String _backupDirectoryPath = 'Carregando...';
@@ -134,6 +133,48 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  Future<void> _selectBackupDirectory() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final selectedPath = await _persistenceService.selectBackupDirectory();
+      
+      if (selectedPath != null) {
+        setState(() {
+          _backupDirectoryPath = selectedPath;
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Diretório de backup alterado com sucesso'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      _logService.error('Erro ao selecionar diretório de backup', error: e, category: 'settings');
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro ao selecionar diretório: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
   Future<void> _loadLoggingState() async {
     setState(() {
       _isLoggingEnabled = _logService.isLoggingEnabled();
@@ -149,11 +190,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _loadSettings() async {
     final theme = await _preferencesService.getTheme();
-    final labelSize = await _preferencesService.getLabelSize();
 
     setState(() {
       _isDarkMode = theme == 'dark';
-      _labelSize = labelSize;
     });
   }
 
@@ -228,23 +267,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
       // Atualizar a contagem de logs
       _countLogs();
-    }
-  }
-
-  Future<void> _changeLabelSize(String size) async {
-    await _preferencesService.saveLabelSize(size);
-
-    setState(() {
-      _labelSize = size;
-    });
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Tamanho de etiqueta alterado para $size'),
-          duration: const Duration(seconds: 2),
-        ),
-      );
     }
   }
 
@@ -657,30 +679,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ),
 
-                // Seção de etiquetas
-                const _SectionHeader(title: 'Etiquetas'),
-                RadioListTile<String>(
-                  title: const Text('Correios'),
-                  subtitle: const Text('Tamanho padrão para etiquetas dos Correios'),
-                  value: 'correios',
-                  groupValue: _labelSize,
-                  onChanged: (value) => _changeLabelSize(value!),
-                ),
-                RadioListTile<String>(
-                  title: const Text('A4'),
-                  subtitle: const Text('Etiquetas em folha A4'),
-                  value: 'a4',
-                  groupValue: _labelSize,
-                  onChanged: (value) => _changeLabelSize(value!),
-                ),
-                RadioListTile<String>(
-                  title: const Text('Pequena'),
-                  subtitle: const Text('Etiquetas pequenas'),
-                  value: 'small',
-                  groupValue: _labelSize,
-                  onChanged: (value) => _changeLabelSize(value!),
-                ),
-
                 // Seção de backup
                 const _SectionHeader(title: 'Backup e Restauração'),
                 ListTile(
@@ -693,6 +691,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   subtitle: Text(_backupDirectoryPath),
                   leading: const Icon(Icons.folder),
                   isThreeLine: true,
+                  trailing: IconButton(
+                    icon: const Icon(Icons.edit),
+                    tooltip: 'Alterar diretório',
+                    onPressed: _selectBackupDirectory,
+                  ),
                 ),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),

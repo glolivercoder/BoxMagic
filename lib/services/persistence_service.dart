@@ -43,9 +43,20 @@ class PersistenceService {
       return backupDir;
     }
 
-    // Usar o caminho fixo para facilitar a localização
-    backupDir = Directory(_fixedBackupPath);
-    _logService.info('Usando diretório de backup fixo: ${backupDir.path}', category: 'backup');
+    // Verificar se existe um diretório personalizado salvo nas preferências
+    final prefs = await SharedPreferences.getInstance();
+    final customPath = prefs.getString(_backupDirPrefKey);
+
+    if (customPath != null && customPath.isNotEmpty) {
+      // Usar o diretório personalizado
+      backupDir = Directory(customPath);
+      _logService.info('Usando diretório de backup personalizado: ${backupDir.path}', category: 'backup');
+    } else {
+      // Usar o diretório padrão para Android
+      final defaultPath = await getDefaultBackupPath();
+      backupDir = Directory(defaultPath);
+      _logService.info('Usando diretório de backup padrão: ${backupDir.path}', category: 'backup');
+    }
 
     // Criar diretório de backup se não existir
     if (!await backupDir.exists()) {
