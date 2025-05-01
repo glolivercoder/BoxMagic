@@ -123,8 +123,8 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
       final moduleCount = qrData.length;
       final cellSize = size / moduleCount;
       
-      // Criar o SVG manualmente
-      String svgPaths = '<rect width="${size.toStringAsFixed(2)}" height="${size.toStringAsFixed(2)}" fill="white" stroke="#cccccc" stroke-width="1" />';
+      // Criar o SVG manualmente - começamos sem o retângulo de fundo para evitar problemas de posicionamento
+      StringBuffer svgBuffer = StringBuffer();
       
       // Adicionar os módulos do QR code
       for (int row = 0; row < moduleCount; row++) {
@@ -132,17 +132,17 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
           if (qrData[row][col] == 1) {
             final x = col * cellSize;
             final y = row * cellSize;
-            svgPaths += '<rect x="${x.toStringAsFixed(2)}" y="${y.toStringAsFixed(2)}" width="${cellSize.toStringAsFixed(2)}" height="${cellSize.toStringAsFixed(2)}" fill="black" />';
+            svgBuffer.write('<rect x="${x.toStringAsFixed(2)}" y="${y.toStringAsFixed(2)}" width="${cellSize.toStringAsFixed(2)}" height="${cellSize.toStringAsFixed(2)}" fill="black" />');
           }
         }
       }
       
-      return svgPaths;
+      return svgBuffer.toString();
     } catch (e) {
       // Em caso de erro, retornar um QR code simples com o texto
-      String svgPaths = '<rect width="${size.toStringAsFixed(2)}" height="${size.toStringAsFixed(2)}" fill="white" stroke="#cccccc" stroke-width="1" />';
-      svgPaths += '<text x="${(size/2).toStringAsFixed(2)}" y="${(size/2).toStringAsFixed(2)}" font-family="Arial" font-size="${(size/10).toStringAsFixed(2)}" fill="black" text-anchor="middle">ID: $data</text>';
-      return svgPaths;
+      StringBuffer svgBuffer = StringBuffer();
+      svgBuffer.write('<text x="0" y="${(size/2).toStringAsFixed(2)}" font-family="Arial" font-size="${(size/10).toStringAsFixed(2)}" fill="black">ID: $data</text>');
+      return svgBuffer.toString();
     }
   }
   
@@ -407,7 +407,7 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
     final List<Box> selectedBoxes = [];
     final Map<int, bool> selectedBoxMap = {};
     LabelFormat selectedFormat = LabelFormat.nameWithBarcodeAndId;
-    LabelPaperType selectedPaperType = LabelPaperType.pimaco6180;
+    LabelPaperType? selectedPaperType = null; // Inicialmente nenhum modelo selecionado
     Uint8List? previewPdf;
     bool isGeneratingPreview = false;
 
@@ -418,8 +418,23 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
     }
 
     // Função para gerar a visualização prévia do PDF
-    Future<void> generatePreview(List<Box> boxes, LabelFormat format, LabelPaperType paperType) async {
-      if (boxes.isEmpty) return;
+    Future<void> generatePreview(List<Box> boxes, LabelFormat format, LabelPaperType? paperType) async {
+      // Se o tipo de papel for nulo, não podemos gerar a visualização
+      if (paperType == null) {
+        setState(() {
+          previewPdf = null;
+          isGeneratingPreview = false;
+        });
+        return;
+      }
+      // Verificar se há caixas selecionadas
+      if (boxes.isEmpty) {
+        setState(() {
+          previewPdf = null;
+          isGeneratingPreview = false;
+        });
+        return;
+      }
 
       setState(() {
         isGeneratingPreview = true;
@@ -441,15 +456,23 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
           isPreview: true, // Ativar modo de visualização
         );
 
-        setState(() {
-          previewPdf = pdfBytes;
-          isGeneratingPreview = false;
-        });
+        if (mounted) {
+          setState(() {
+            previewPdf = pdfBytes;
+            isGeneratingPreview = false;
+          });
+        }
       } catch (e) {
-        setState(() {
-          isGeneratingPreview = false;
-        });
-        _logService.error('Erro ao gerar visualização prévia', error: e);
+        if (mounted) {
+          setState(() {
+            previewPdf = null;
+            isGeneratingPreview = false;
+          });
+          _logService.error('Erro ao gerar visualização prévia', error: e);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Erro ao gerar visualização: ${e.toString()}'))
+          );
+        }
       }
     }
 
@@ -539,33 +562,27 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
                         style: TextStyle(fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 5),
-                      // Dropdown com checkboxes para selecionar modelo Pimaco
+                      // Lista simples de modelos Pimaco com RadioListTile para seleção única
                       Container(
                         decoration: BoxDecoration(
                           border: Border.all(color: Colors.grey.shade300),
                           borderRadius: BorderRadius.circular(4.0),
                         ),
-                        child: ExpansionTile(
-                          title: Text(
-                            // Mostrar o modelo selecionado ou um texto padrão
-                            modelosPimaco.firstWhere(
-                              (modelo) => _mapModeloToPaperType(modelo) == selectedPaperType,
-                              orElse: () => modelosPimaco.first,
-                            ).nome,
-                            style: TextStyle(fontSize: 16),
-                          ),
-                          subtitle: Text(
-                            'Clique para selecionar um modelo',
-                            style: TextStyle(fontSize: 12, color: Colors.grey),
-                          ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            Padding(
+                              padding: const EdgeInsets.all(8.0),
+                              child: Text(
+                                'Selecione apenas um modelo:',
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                            ),
                             ...modelosPimaco.map((modelo) {
-                              // Verificar se este modelo está selecionado
-                              final isSelected = _mapModeloToPaperType(modelo) == selectedPaperType;
-                              
                               // Determinar o tipo de papel para este modelo
                               String paperType = '';
-                              switch (_mapModeloToPaperType(modelo)) {
+                              LabelPaperType modelPaperType = _mapModeloToPaperType(modelo);
+                              switch (modelPaperType) {
                                 case LabelPaperType.pimaco6180:
                                   paperType = 'A4 (3 colunas)';
                                   break;
@@ -577,36 +594,37 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
                                   break;
                               }
                               
-                              return CheckboxListTile(
+                              return RadioListTile<LabelPaperType>(
                                 title: Text('${modelo.nome} - $paperType'),
                                 subtitle: Text(
                                   '${modelo.larguraCm.toStringAsFixed(1)}x${modelo.alturaCm.toStringAsFixed(1)}cm (${modelo.etiquetasPorFolha} por folha)',
                                   style: TextStyle(fontSize: 12),
                                 ),
-                                value: isSelected,
-                                onChanged: (bool? value) {
-                                  if (value == true) {
-                                    // Primeiro, mapear para o tipo de papel correto
-                                    final newPaperType = _mapModeloToPaperType(modelo);
-                                    
+                                value: modelPaperType,
+                                groupValue: selectedPaperType,
+                                onChanged: (LabelPaperType? value) {
+                                  if (value != null) {
                                     // Salvar último modelo usado
                                     _preferencesService.saveLastUsedLabelModel(modelo.nome);
                                     
                                     // Log para debug
-                                    _logService.debug('Modelo alterado para: ${modelo.nome}, Tipo: $newPaperType', category: 'preview');
+                                    _logService.debug('Modelo alterado para: ${modelo.nome}, Tipo: $value', category: 'preview');
                                     
                                     // Atualizar estado em uma única chamada para evitar loops
                                     setState(() {
-                                      selectedPaperType = newPaperType;
+                                      selectedPaperType = value;
                                       previewPdf = null;
                                       isGeneratingPreview = true;
                                     });
                                     
                                     // Gerar novo preview diretamente, sem delay
-                                    generatePreview(selectedBoxes, selectedFormat, newPaperType);
+                                    if (selectedBoxes.isNotEmpty) {
+                                      generatePreview(selectedBoxes, selectedFormat, value);
+                                    }
                                   }
                                 },
-                                controlAffinity: ListTileControlAffinity.leading,
+                                activeColor: Theme.of(context).primaryColor,
+                                dense: true,
                               );
                             }).toList(),
                           ],
@@ -675,11 +693,21 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
                                                 ),
                                                 const SizedBox(width: 8),
                                                 ElevatedButton.icon(
-                                                  onPressed: () async {
+                                                  onPressed: selectedPaperType == null ? null : () async {
+                                                    if (selectedPaperType == null) {
+                                                      ScaffoldMessenger.of(context).showSnackBar(
+                                                        const SnackBar(
+                                                          content: Text('Selecione um modelo de etiqueta primeiro'),
+                                                          duration: Duration(seconds: 2),
+                                                        ),
+                                                      );
+                                                      return;
+                                                    }
+                                                    
                                                     // Mostrar indicador de progresso
                                                     ScaffoldMessenger.of(context).showSnackBar(
                                                       const SnackBar(
-                                                        content: Text('Preparando arquivos SVG...'),
+                                                        content: Text('Exportando SVG...'),
                                                         duration: Duration(seconds: 1),
                                                       ),
                                                     );
@@ -814,23 +842,60 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
                                                           // Adicionar um retângulo de fundo para a etiqueta
                                                           svgContent += '    <rect x="0" y="0" width="${labelWidthPx.toStringAsFixed(2)}" height="${labelHeightPx.toStringAsFixed(2)}" fill="white" stroke="#cccccc" stroke-width="1" />\n';
                                                           
-                                                          // Adicionar o ID da caixa
-                                                          svgContent += '    <text x="10" y="20" font-family="Arial" font-size="16" font-weight="bold" fill="black">#${box.formattedId}</text>\n';
-                                                          
-                                                          // Adicionar o nome da caixa
-                                                          svgContent += '    <text x="10" y="45" font-family="Arial" font-size="14" fill="black">${_escapeSvgText(box.name)}</text>\n';
-                                                          
-                                                          // Adicionar a categoria
-                                                          svgContent += '    <text x="10" y="65" font-family="Arial" font-size="12" fill="#666666">${_escapeSvgText(box.category)}</text>\n';
-                                                          
-                                                          // Adicionar QR code
-                                                          final qrSize = labelHeightPx * 0.5;
-                                                          final qrX = labelWidthPx - qrSize - 10;
-                                                          final qrY = 10;
-                                                          
+                                                          // Calcular tamanho do QR code baseado no tamanho da etiqueta (ajustado para ser proporcional)
+                                                          // Usar o menor valor entre 40% da largura e 70% da altura para garantir que caiba
+                                                          double qrSizeByWidth = labelWidth * 0.4;
+                                                          double qrSizeByHeight = labelHeight * 0.7;
+                                                          double qrSize = qrSizeByWidth < qrSizeByHeight ? qrSizeByWidth : qrSizeByHeight;
+                                                    
+                                                          // Calcular tamanhos de fonte baseados no tamanho da etiqueta
+                                                          double titleFontSize = labelHeight * 0.15; // 15% da altura para o título (ID)
+                                                          double nameFontSize = labelHeight * 0.12;  // 12% da altura para o nome
+                                                          double categoryFontSize = labelHeight * 0.10; // 10% da altura para a categoria
+                                                    
+                                                          // Limitar tamanhos de fonte para legibilidade
+                                                          titleFontSize = titleFontSize < 8 ? 8 : (titleFontSize > 16 ? 16 : titleFontSize);
+                                                          nameFontSize = nameFontSize < 7 ? 7 : (nameFontSize > 14 ? 14 : nameFontSize);
+                                                          categoryFontSize = categoryFontSize < 6 ? 6 : (categoryFontSize > 12 ? 12 : categoryFontSize);
+                                                    
+                                                          // Posicionar o QR code no canto superior direito com margem
+                                                          double qrX = labelWidth - qrSize - (labelWidth * 0.05); // 5% de margem
+                                                          double qrY = labelHeight * 0.1; // 10% da altura como margem superior
+                                                    
                                                           // Gerar QR code em SVG usando a biblioteca qr_flutter
-                                                          final qrSvg = _generateQrCodeSvg(box.id.toString(), qrSize);
-                                                          svgContent += '    <g transform="translate(${qrX.toStringAsFixed(2)},${qrY.toStringAsFixed(2)})">${qrSvg}</g>\n';
+                                                          final qrSvg = _generateQrCodeSvg(box.formattedId, qrSize);
+                                                          
+                                                          // Adicionar QR code no SVG com posicionamento correto
+                                                          svgContent += '    <g transform="translate($qrX, $qrY)">\n';
+                                                          svgContent += '      $qrSvg\n';
+                                                          svgContent += '    </g>\n';
+                                                          
+                                                          // Calcular espaço disponível para texto (largura total menos QR code e margens)
+                                                          double textAreaWidth = qrX - (labelWidth * 0.1); // 10% de margem total
+                                                          
+                                                          // Adicionar texto com o ID da caixa
+                                                          svgContent += '    <text x="${(labelWidth * 0.05).toStringAsFixed(2)}" y="${(labelHeight * 0.25).toStringAsFixed(2)}" font-family="Arial" font-size="${titleFontSize.toStringAsFixed(1)}" font-weight="bold">#${_escapeSvgText(box.formattedId)}</text>\n';
+                                                          
+                                                          // Adicionar nome da caixa com truncamento se necessário
+                                                          String name = _escapeSvgText(box.name);
+                                                          // Limitar o nome a um tamanho razoável para a etiqueta
+                                                          int maxChars = (textAreaWidth / (nameFontSize * 0.6)).round(); // Estimativa de caracteres que cabem
+                                                          if (name.length > maxChars) {
+                                                              name = name.substring(0, maxChars - 3) + '...';
+                                                          }
+                                                          
+                                                          // Adicionar nome ao SVG
+                                                          svgContent += '    <text x="${(labelWidth * 0.05).toStringAsFixed(2)}" y="${(labelHeight * 0.5).toStringAsFixed(2)}" font-family="Arial" font-size="${nameFontSize.toStringAsFixed(1)}">${name}</text>\n';
+                                                          
+                                                          // Adicionar categoria com truncamento se necessário
+                                                          String category = _escapeSvgText(box.category);
+                                                          maxChars = (textAreaWidth / (categoryFontSize * 0.6)).round();
+                                                          if (category.length > maxChars) {
+                                                              category = category.substring(0, maxChars - 3) + '...';
+                                                          }
+                                                          
+                                                          // Adicionar categoria ao SVG
+                                                          svgContent += '    <text x="${(labelWidth * 0.05).toStringAsFixed(2)}" y="${(labelHeight * 0.7).toStringAsFixed(2)}" font-family="Arial" font-size="${categoryFontSize.toStringAsFixed(1)}" fill="gray">${category}</text>\n';
                                                           
                                                           // Buscar e incluir os objetos da caixa
                                                           try {
@@ -1092,8 +1157,19 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
   Future<void> _printLabels(
     List<Box> boxes,
     LabelFormat format,
-    LabelPaperType paperType,
+    LabelPaperType? paperType,
   ) async {
+    // Verificar se o tipo de papel foi selecionado
+    if (paperType == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Selecione um modelo de etiqueta primeiro'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+    
     try {
       // Mostrar mensagem de carregamento
       ScaffoldMessenger.of(context).showSnackBar(
