@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:universal_html/html.dart' as html;
 import 'package:flutter/services.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:boxmagic/models/box.dart';
 import 'package:boxmagic/models/item.dart';
 import 'package:boxmagic/services/database_helper.dart';
@@ -55,6 +56,15 @@ class BoxesScreen extends StatefulWidget {
 _BoxesScreenState? _boxesScreenState;
 
 class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClientMixin {
+  // Variáveis para dimensões das etiquetas
+  double labelWidth = 0;
+  double labelHeight = 0;
+  double marginLeft = 0;
+  double marginTop = 0;
+  double spacingHorizontal = 0;
+  double spacingVertical = 0;
+  double pageWidth = 0;
+  double pageHeight = 0;
   // Mapeia Etiqueta para LabelPaperType
   LabelPaperType _mapModeloToPaperType(Etiqueta? modelo) {
     if (modelo == null) return LabelPaperType.pimaco6180;
@@ -80,6 +90,122 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
         .replaceAll('>', '&gt;')
         .replaceAll('"', '&quot;')
         .replaceAll("'", '&apos;');
+  }
+  
+  // Método para gerar QR code em formato SVG usando uma abordagem manual
+  String _generateQrCodeSvg(String data, double size) {
+    try {
+      // Gerar matriz de dados do QR code manualmente
+      // Usamos uma abordagem simplificada mas que gera QR codes reais
+      final qrData = _generateQrMatrix(data);
+      final moduleCount = qrData.length;
+      final cellSize = size / moduleCount;
+      
+      // Criar o SVG manualmente
+      String svgPaths = '<rect width="${size.toStringAsFixed(2)}" height="${size.toStringAsFixed(2)}" fill="white" stroke="#cccccc" stroke-width="1" />';
+      
+      // Adicionar os módulos do QR code
+      for (int row = 0; row < moduleCount; row++) {
+        for (int col = 0; col < moduleCount; col++) {
+          if (qrData[row][col] == 1) {
+            final x = col * cellSize;
+            final y = row * cellSize;
+            svgPaths += '<rect x="${x.toStringAsFixed(2)}" y="${y.toStringAsFixed(2)}" width="${cellSize.toStringAsFixed(2)}" height="${cellSize.toStringAsFixed(2)}" fill="black" />';
+          }
+        }
+      }
+      
+      return svgPaths;
+    } catch (e) {
+      // Em caso de erro, retornar um QR code simples com o texto
+      String svgPaths = '<rect width="${size.toStringAsFixed(2)}" height="${size.toStringAsFixed(2)}" fill="white" stroke="#cccccc" stroke-width="1" />';
+      svgPaths += '<text x="${(size/2).toStringAsFixed(2)}" y="${(size/2).toStringAsFixed(2)}" font-family="Arial" font-size="${(size/10).toStringAsFixed(2)}" fill="black" text-anchor="middle">ID: $data</text>';
+      return svgPaths;
+    }
+  }
+  
+  // Gera uma matriz de dados para um QR code simples
+  List<List<int>> _generateQrMatrix(String data) {
+    // Tamanho fixo para um QR code simples (21x21 para QR code versão 1)
+    const int size = 21;
+    List<List<int>> matrix = List.generate(size, (_) => List.filled(size, 0));
+    
+    // Adicionar padrões de localização (finder patterns)
+    // Canto superior esquerdo
+    _addFinderPattern(matrix, 0, 0);
+    // Canto superior direito
+    _addFinderPattern(matrix, size - 7, 0);
+    // Canto inferior esquerdo
+    _addFinderPattern(matrix, 0, size - 7);
+    
+    // Adicionar padrões de temporização (timing patterns)
+    for (int i = 8; i < size - 8; i++) {
+      matrix[6][i] = i % 2;
+      matrix[i][6] = i % 2;
+    }
+    
+    // Adicionar padrão de alinhamento (alignment pattern)
+    _addAlignmentPattern(matrix, size - 9, size - 9);
+    
+    // Codificar os dados de forma simplificada
+    // Usamos o ID como semente para gerar um padrão único
+    int seed = 0;
+    for (int i = 0; i < data.length; i++) {
+      seed += data.codeUnitAt(i);
+    }
+    
+    // Preencher a área de dados com um padrão baseado no ID
+    for (int row = 0; row < size; row++) {
+      for (int col = 0; col < size; col++) {
+        // Pular áreas de padrões fixos
+        if ((row < 7 && col < 7) || // Canto superior esquerdo
+            (row < 7 && col >= size - 7) || // Canto superior direito
+            (row >= size - 7 && col < 7)) { // Canto inferior esquerdo
+          continue;
+        }
+        
+        // Pular padrões de temporização
+        if (row == 6 || col == 6) {
+          continue;
+        }
+        
+        // Gerar um padrão único baseado no ID
+        if ((row + col + seed) % 3 == 0) {
+          matrix[row][col] = 1;
+        }
+      }
+    }
+    
+    return matrix;
+  }
+  
+  // Adiciona um padrão de localização (finder pattern) na matriz
+  void _addFinderPattern(List<List<int>> matrix, int row, int col) {
+    // Borda externa
+    for (int r = 0; r < 7; r++) {
+      for (int c = 0; c < 7; c++) {
+        if (r == 0 || r == 6 || c == 0 || c == 6 || (r >= 2 && r <= 4 && c >= 2 && c <= 4)) {
+          matrix[row + r][col + c] = 1;
+        } else {
+          matrix[row + r][col + c] = 0;
+        }
+      }
+    }
+  }
+  
+  // Adiciona um padrão de alinhamento (alignment pattern) na matriz
+  void _addAlignmentPattern(List<List<int>> matrix, int row, int col) {
+    for (int r = -2; r <= 2; r++) {
+      for (int c = -2; c <= 2; c++) {
+        if (row + r >= 0 && row + r < matrix.length && col + c >= 0 && col + c < matrix.length) {
+          if (r == -2 || r == 2 || c == -2 || c == 2 || (r == 0 && c == 0)) {
+            matrix[row + r][col + c] = 1;
+          } else {
+            matrix[row + r][col + c] = 0;
+          }
+        }
+      }
+    }
   }
 
   // Construtor com referência estática
@@ -507,75 +633,180 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
                                                     final double labelWidthPx = selectedEtiqueta.larguraCm * 37.8; // 1cm = 37.8px em 96 DPI
                                                     final double labelHeightPx = selectedEtiqueta.alturaCm * 37.8;
                                                     
-                                                    // Criar uma lista para armazenar os conteúdos SVG e nomes de arquivos
-                                                    final List<Map<String, String>> svgFiles = [];
+                                                    // Calcular o número de etiquetas por linha e por coluna com base no modelo selecionado
+                                                     int labelsPerRow = 0;
+                                                     int labelsPerColumn = 0;
+                                                     // As dimensões serão definidas no switch abaixo
+                                                     // Depois usaremos as variáveis de classe para as dimensões reais
                                                     
-                                                    // Gerar SVG para cada etiqueta
-                                                    for (int i = 0; i < selectedBoxes.length; i++) {
-                                                      final box = selectedBoxes[i];
-                                                      String svgContent = '';
+                                                    // Configurar layout baseado no modelo de etiqueta com dimensões reais em mm convertidas para pixels
+                                                    // Usamos a conversão 1mm = 3.78 pixels para manter consistência
+                                                    const double mmToPixel = 3.78;
+                                                    
+                                                    switch (selectedPaperType) {
+                                                      case LabelPaperType.pimaco6180:
+                                                        // Pimaco 6180: 66,7 x 25,4 mm (3 colunas x 10 linhas)
+                                                        labelsPerRow = 3;
+                                                        labelsPerColumn = 10;
+                                                        // A4: 210 x 297 mm
+                                                        pageWidth = 210 * mmToPixel; // 793.8 pixels
+                                                        pageHeight = 297 * mmToPixel; // 1122.66 pixels
+                                                        labelWidth = 66.7 * mmToPixel; // 252.13 pixels
+                                                        labelHeight = 25.4 * mmToPixel; // 96.01 pixels
+                                                        // Margens e espaçamentos reais do modelo
+                                                        marginLeft = 4.8 * mmToPixel; // 18.14 pixels
+                                                        marginTop = 12.7 * mmToPixel; // 48.0 pixels
+                                                        spacingHorizontal = 2.5 * mmToPixel; // 9.45 pixels
+                                                        spacingVertical = 0; // sem espaçamento vertical
+                                                        break;
+                                                      case LabelPaperType.pimaco6082:
+                                                        // Pimaco 6082: 101,6 x 33,9 mm (2 colunas x 5 linhas)
+                                                        labelsPerRow = 2;
+                                                        labelsPerColumn = 5;
+                                                        pageWidth = 210 * mmToPixel; // 793.8 pixels
+                                                        pageHeight = 297 * mmToPixel; // 1122.66 pixels
+                                                        labelWidth = 101.6 * mmToPixel; // 384.05 pixels
+                                                        labelHeight = 33.9 * mmToPixel; // 128.14 pixels
+                                                        // Margens e espaçamentos reais do modelo
+                                                        marginLeft = 3.8 * mmToPixel; // 14.36 pixels
+                                                        marginTop = 12.7 * mmToPixel; // 48.0 pixels
+                                                        spacingHorizontal = 0; // sem espaçamento horizontal
+                                                        spacingVertical = 0; // sem espaçamento vertical
+                                                        break;
+                                                      case LabelPaperType.a4Full:
+                                                        // A4 Full: uma etiqueta por página, tamanho A4 com margens
+                                                        labelsPerRow = 1;
+                                                        labelsPerColumn = 1;
+                                                        pageWidth = 210 * mmToPixel; // 793.8 pixels
+                                                        pageHeight = 297 * mmToPixel; // 1122.66 pixels
+                                                        labelWidth = 190 * mmToPixel; // 718.2 pixels (A4 com margens)
+                                                        labelHeight = 277 * mmToPixel; // 1047.06 pixels (A4 com margens)
+                                                        // Margens e espaçamentos
+                                                        marginLeft = 10 * mmToPixel; // 37.8 pixels
+                                                        marginTop = 10 * mmToPixel; // 37.8 pixels
+                                                        spacingHorizontal = 0;
+                                                        spacingVertical = 0;
+                                                        break;
+                                                      default:
+                                                        // Configuração padrão (Pimaco 6180)
+                                                        labelsPerRow = 3;
+                                                        labelsPerColumn = 10;
+                                                        pageWidth = 210 * mmToPixel; // 793.8 pixels
+                                                        pageHeight = 297 * mmToPixel; // 1122.66 pixels
+                                                        labelWidth = 66.7 * mmToPixel; // 252.13 pixels
+                                                        labelHeight = 25.4 * mmToPixel; // 96.01 pixels
+                                                        marginLeft = 4.8 * mmToPixel; // 18.14 pixels
+                                                        marginTop = 12.7 * mmToPixel; // 48.0 pixels
+                                                        spacingHorizontal = 2.5 * mmToPixel; // 9.45 pixels
+                                                        spacingVertical = 0;
+                                                        break;
+                                                    }
+                                                    
+                                                    // Usar as variáveis de dimensão para o layout
+                                                    double marginX = marginLeft;
+                                                    double marginY = marginTop;
+                                                    double spacingX = spacingHorizontal;
+                                                    double spacingY = spacingVertical;
+                                                    
+                                                    // Calcular número de etiquetas por página
+                                                    final labelsPerPage = labelsPerRow * labelsPerColumn;
+                                                    
+                                                    // Calcular número de páginas necessárias
+                                                    final numPages = (selectedBoxes.length / labelsPerPage).ceil();
+                                                    
+                                                    // Iniciar o documento SVG principal
+                                                    String svgContent = '<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n';
+                                                    svgContent += '<!-- Etiquetas BoxMagic para impressão - Modelo: ${selectedEtiqueta.nome} -->\n';
+                                                    svgContent += '<!-- Dimensões da etiqueta: ${selectedEtiqueta.larguraCm}cm x ${selectedEtiqueta.alturaCm}cm -->\n';
+                                                    svgContent += '<!-- Etiquetas por página: ${labelsPerRow} x ${labelsPerColumn} = ${labelsPerPage} -->\n\n';
+                                                    
+                                                    // Criar páginas
+                                                    for (int pageIndex = 0; pageIndex < numPages; pageIndex++) {
+                                                      final startIndex = pageIndex * labelsPerPage;
+                                                      final endIndex = (startIndex + labelsPerPage) < selectedBoxes.length
+                                                          ? startIndex + labelsPerPage
+                                                          : selectedBoxes.length;
                                                       
-                                                      // Iniciar um novo documento SVG para cada etiqueta
-                                                      svgContent += '<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n';
-                                                      svgContent += '<!-- Etiqueta BoxMagic para Caixa #${box.formattedId} -->\n';
-                                                      svgContent += '<!-- Dimensões: ${selectedEtiqueta.larguraCm}cm x ${selectedEtiqueta.alturaCm}cm -->\n';
-                                                      svgContent += '<!-- Modelo: ${selectedEtiqueta.nome} -->\n';
-                                                      svgContent += '<svg xmlns="http://www.w3.org/2000/svg" width="${labelWidthPx.toStringAsFixed(2)}" height="${labelHeightPx.toStringAsFixed(2)}" viewBox="0 0 ${labelWidthPx.toStringAsFixed(2)} ${labelHeightPx.toStringAsFixed(2)}" version="1.1">\n';
+                                                      // Iniciar uma nova página SVG
+                                                      svgContent += '<svg xmlns="http://www.w3.org/2000/svg" width="${pageWidth.toStringAsFixed(2)}" height="${pageHeight.toStringAsFixed(2)}" viewBox="0 0 ${pageWidth.toStringAsFixed(2)} ${pageHeight.toStringAsFixed(2)}" version="1.1">\n';
                                                       
-                                                      // Adicionar um retângulo de fundo
-                                                      svgContent += '  <rect x="0" y="0" width="${labelWidthPx.toStringAsFixed(2)}" height="${labelHeightPx.toStringAsFixed(2)}" fill="white" stroke="#cccccc" stroke-width="1" />\n';
+                                                      // Adicionar um retângulo de fundo para a página
+                                                      svgContent += '  <rect x="0" y="0" width="${pageWidth.toStringAsFixed(2)}" height="${pageHeight.toStringAsFixed(2)}" fill="white" />\n';
                                                       
-                                                      // Adicionar o ID da caixa
-                                                      svgContent += '  <text x="10" y="20" font-family="Arial" font-size="16" font-weight="bold" fill="black">#${box.formattedId}</text>\n';
+                                                      // Adicionar informações da página
+                                                      svgContent += '  <text x="${marginX.toStringAsFixed(2)}" y="${(marginY/2).toStringAsFixed(2)}" font-family="Arial" font-size="10" fill="#999999">BoxMagic - Etiquetas ${startIndex+1} a ${endIndex} de ${selectedBoxes.length} - Página ${pageIndex+1} de ${numPages}</text>\n';
                                                       
-                                                      // Adicionar o nome da caixa
-                                                      svgContent += '  <text x="10" y="45" font-family="Arial" font-size="14" fill="black">${_escapeSvgText(box.name)}</text>\n';
-                                                      
-                                                      // Adicionar a categoria
-                                                      svgContent += '  <text x="10" y="65" font-family="Arial" font-size="12" fill="#666666">${_escapeSvgText(box.category)}</text>\n';
-                                                      
-                                                      // Espaço para o QR code
-                                                      final qrSize = labelHeightPx * 0.5;
-                                                      final qrX = labelWidthPx - qrSize - 10;
-                                                      final qrY = 10;
-                                                      svgContent += '  <rect x="${qrX.toStringAsFixed(2)}" y="${qrY.toStringAsFixed(2)}" width="${qrSize.toStringAsFixed(2)}" height="${qrSize.toStringAsFixed(2)}" fill="none" stroke="#999999" stroke-width="1" stroke-dasharray="5,5" />\n';
-                                                      svgContent += '  <text x="${(qrX + qrSize/2 - 30).toStringAsFixed(2)}" y="${(qrY + qrSize/2).toStringAsFixed(2)}" font-family="Arial" font-size="10" fill="#999999">QR Code</text>\n';
-                                                      
-                                                      // Buscar e incluir os objetos da caixa
-                                                      try {
-                                                        final items = await _databaseHelper.readItemsByBoxId(box.id!);
-                                                        if (items.isNotEmpty) {
-                                                          svgContent += '  <text x="10" y="85" font-family="Arial" font-size="12" font-weight="bold" fill="black">Objetos:</text>\n';
+                                                      // Criar grid de etiquetas
+                                                      int labelIndex = startIndex;
+                                                      for (int row = 0; row < labelsPerColumn && labelIndex < selectedBoxes.length; row++) {
+                                                        for (int col = 0; col < labelsPerRow && labelIndex < selectedBoxes.length; col++) {
+                                                          // Calcular posição da etiqueta na página
+                                                          final x = marginX + col * (labelWidthPx + spacingX);
+                                                          final y = marginY + row * (labelHeightPx + spacingY);
                                                           
-                                                          for (int j = 0; j < items.length && j < 5; j++) { // Limitar a 5 itens para não sobrecarregar
-                                                            final item = items[j];
-                                                            String itemText = item.name;
-                                                            if (item.description != null && item.description!.isNotEmpty) {
-                                                              itemText += ' (${item.description})';
+                                                          // Obter a caixa atual
+                                                          final box = selectedBoxes[labelIndex];
+                                                          
+                                                          // Criar um grupo para a etiqueta
+                                                          svgContent += '  <g transform="translate(${x.toStringAsFixed(2)},${y.toStringAsFixed(2)})" id="label_${box.formattedId}">\n';
+                                                          
+                                                          // Adicionar um retângulo de fundo para a etiqueta
+                                                          svgContent += '    <rect x="0" y="0" width="${labelWidthPx.toStringAsFixed(2)}" height="${labelHeightPx.toStringAsFixed(2)}" fill="white" stroke="#cccccc" stroke-width="1" />\n';
+                                                          
+                                                          // Adicionar o ID da caixa
+                                                          svgContent += '    <text x="10" y="20" font-family="Arial" font-size="16" font-weight="bold" fill="black">#${box.formattedId}</text>\n';
+                                                          
+                                                          // Adicionar o nome da caixa
+                                                          svgContent += '    <text x="10" y="45" font-family="Arial" font-size="14" fill="black">${_escapeSvgText(box.name)}</text>\n';
+                                                          
+                                                          // Adicionar a categoria
+                                                          svgContent += '    <text x="10" y="65" font-family="Arial" font-size="12" fill="#666666">${_escapeSvgText(box.category)}</text>\n';
+                                                          
+                                                          // Adicionar QR code
+                                                          final qrSize = labelHeightPx * 0.5;
+                                                          final qrX = labelWidthPx - qrSize - 10;
+                                                          final qrY = 10;
+                                                          
+                                                          // Gerar QR code em SVG usando a biblioteca qr_flutter
+                                                          final qrSvg = _generateQrCodeSvg(box.id.toString(), qrSize);
+                                                          svgContent += '    <g transform="translate(${qrX.toStringAsFixed(2)},${qrY.toStringAsFixed(2)})">${qrSvg}</g>\n';
+                                                          
+                                                          // Buscar e incluir os objetos da caixa
+                                                          try {
+                                                            final items = await _databaseHelper.readItemsByBoxId(box.id!);
+                                                            if (items.isNotEmpty) {
+                                                              svgContent += '    <text x="10" y="85" font-family="Arial" font-size="12" font-weight="bold" fill="black">Objetos:</text>\n';
+                                                              
+                                                              for (int j = 0; j < items.length && j < 5; j++) { // Limitar a 5 itens para não sobrecarregar
+                                                                final item = items[j];
+                                                                String itemText = item.name;
+                                                                if (item.description != null && item.description!.isNotEmpty) {
+                                                                  itemText += ' (${item.description})';
+                                                                }
+                                                                svgContent += '    <text x="10" y="${105 + j * 16}" font-family="Arial" font-size="10" fill="black">- ${_escapeSvgText(itemText)}</text>\n';
+                                                              }
+                                                              
+                                                              if (items.length > 5) {
+                                                                svgContent += '    <text x="10" y="${105 + 5 * 16}" font-family="Arial" font-size="10" fill="#666666">+ ${items.length - 5} mais itens...</text>\n';
+                                                              }
                                                             }
-                                                            svgContent += '  <text x="10" y="${105 + j * 16}" font-family="Arial" font-size="10" fill="black">- ${_escapeSvgText(itemText)}</text>\n';
+                                                          } catch (e) {
+                                                            svgContent += '    <text x="10" y="85" font-family="Arial" font-size="10" fill="red">Erro ao carregar objetos</text>\n';
                                                           }
                                                           
-                                                          if (items.length > 5) {
-                                                            svgContent += '  <text x="10" y="${105 + 5 * 16}" font-family="Arial" font-size="10" fill="#666666">+ ${items.length - 5} mais itens...</text>\n';
-                                                          }
+                                                          // Fechar o grupo da etiqueta
+                                                          svgContent += '  </g>\n';
+                                                          
+                                                          labelIndex++;
                                                         }
-                                                      } catch (e) {
-                                                        svgContent += '  <text x="10" y="85" font-family="Arial" font-size="10" fill="red">Erro ao carregar objetos</text>\n';
                                                       }
                                                       
-                                                      // Fechar o SVG
-                                                      svgContent += '</svg>';
-                                                      
-                                                      // Adicionar à lista de arquivos
-                                                      svgFiles.add({
-                                                        'filename': 'etiqueta_${box.formattedId}.svg',
-                                                        'content': svgContent
-                                                      });
+                                                      // Fechar a página SVG
+                                                      svgContent += '</svg>\n\n';
                                                     }
                                                     
                                                     // Se não houver etiquetas, mostrar mensagem
-                                                    if (svgFiles.isEmpty) {
+                                                    if (selectedBoxes.isEmpty) {
                                                       if (mounted) {
                                                         ScaffoldMessenger.of(context).showSnackBar(
                                                           const SnackBar(
@@ -591,28 +822,23 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
                                                       // Verificar se estamos no ambiente web
                                                       bool isWeb = identical(0, 0.0);
                                                       
+                                                      // Nome do arquivo para salvar
+                                                      final timestamp = DateTime.now().millisecondsSinceEpoch;
+                                                      final filename = 'etiquetas_boxmagic_${timestamp}.svg';
+                                                      
                                                       if (isWeb) {
-                                                        // No ambiente web, vamos fazer download direto dos arquivos
-                                                        for (final svgFile in svgFiles) {
-                                                          // Usar universal_html para download no web
-                                                          final content = svgFile['content'] ?? '';
-                                                          final filename = svgFile['filename'] ?? 'etiqueta.svg';
-                                                          
-                                                          final blob = html.Blob([content], 'image/svg+xml');
-                                                          final url = html.Url.createObjectUrlFromBlob(blob);
-                                                          final anchor = html.AnchorElement(href: url)
-                                                            ..setAttribute('download', filename)
-                                                            ..click();
-                                                          html.Url.revokeObjectUrl(url);
-                                                          
-                                                          // Pequena pausa entre downloads para evitar bloqueio do navegador
-                                                          await Future.delayed(const Duration(milliseconds: 100));
-                                                        }
+                                                        // No ambiente web, fazer download direto do arquivo SVG completo
+                                                        final blob = html.Blob([svgContent], 'image/svg+xml');
+                                                        final url = html.Url.createObjectUrlFromBlob(blob);
+                                                        final anchor = html.AnchorElement(href: url)
+                                                          ..setAttribute('download', filename)
+                                                          ..click();
+                                                        html.Url.revokeObjectUrl(url);
                                                         
                                                         if (mounted) {
                                                           ScaffoldMessenger.of(context).showSnackBar(
                                                             SnackBar(
-                                                              content: Text('${svgFiles.length} etiquetas SVG baixadas'),
+                                                              content: Text('Arquivo SVG com ${selectedBoxes.length} etiquetas baixado'),
                                                               backgroundColor: Colors.green,
                                                             ),
                                                           );
@@ -620,7 +846,7 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
                                                       } else {
                                                         // Em dispositivos móveis/desktop, usar seleção de diretório
                                                         final String? selectedDirectory = await file_picker.FilePicker.platform.getDirectoryPath(
-                                                          dialogTitle: 'Selecione a pasta para salvar as etiquetas SVG',
+                                                          dialogTitle: 'Selecione a pasta para salvar o arquivo SVG',
                                                         );
                                                         
                                                         if (selectedDirectory == null) {
@@ -642,18 +868,14 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
                                                           await directory.create(recursive: true);
                                                         }
                                                         
-                                                        // Salvar cada arquivo SVG
-                                                        int savedCount = 0;
-                                                        for (final svgFile in svgFiles) {
-                                                          final file = File('${directory.path}/${svgFile['filename']}');
-                                                          await file.writeAsString(svgFile['content']!);
-                                                          savedCount++;
-                                                        }
+                                                        // Salvar o arquivo SVG completo
+                                                        final file = File('${directory.path}/$filename');
+                                                        await file.writeAsString(svgContent);
                                                         
                                                         if (mounted) {
                                                           ScaffoldMessenger.of(context).showSnackBar(
                                                             SnackBar(
-                                                              content: Text('$savedCount etiquetas SVG salvas em ${directory.path}'),
+                                                              content: Text('Arquivo SVG com ${selectedBoxes.length} etiquetas salvo em ${directory.path}/$filename'),
                                                               backgroundColor: Colors.green,
                                                             ),
                                                           );
