@@ -43,14 +43,18 @@ class LabelPrintingService {
   // Calcular tamanho do QR code proporcional ao tamanho da etiqueta
   double _calculateQrCodeSize(double labelHeight, double labelWidth) {
     // Usar o menor valor entre altura e largura para garantir que o QR code caiba
-    // Reduzir para 50% da menor dimensão para garantir que fique dentro das margens
     double minDimension = labelHeight < labelWidth ? labelHeight : labelWidth;
     
-    // Limitar o tamanho máximo para garantir que caiba na etiqueta
-    double maxSize = minDimension * 0.5;
+    // Considerar o espaço disponível com margens
+    double availableSpace = minDimension * 0.85; // Reservar 15% para margens
     
-    // Garantir um tamanho mínimo para legibilidade
-    return maxSize < 20 ? 20 : (maxSize > 80 ? 80 : maxSize);
+    // Limitar o tamanho máximo para garantir que caiba na etiqueta
+    double maxSize = availableSpace * 0.45; // Usar no máximo 45% do espaço disponível
+    
+    // Garantir um tamanho mínimo para legibilidade e máximo para não ultrapassar margens
+    // Mínimo de 20 para garantir que o QR code seja legível
+    // Máximo de 70 para garantir que não ultrapasse as margens em etiquetas pequenas
+    return maxSize < 20 ? 20 : (maxSize > 70 ? 70 : maxSize);
   }
 
   // Dimensões do papel Pimaco 6180 (padrão Correios)
@@ -320,16 +324,24 @@ class LabelPrintingService {
           child: pw.Center(
             child: qrCode != null
                 ? pw.Container(
-                    padding: const pw.EdgeInsets.all(2),
-                    constraints: pw.BoxConstraints(
-                      maxWidth: labelWidth * 0.8,
-                      maxHeight: labelHeight * 0.5,
+                    padding: const pw.EdgeInsets.all(4),
+                    margin: const pw.EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                    decoration: pw.BoxDecoration(
+                      color: PdfColors.white,
+                      border: pw.Border.all(color: PdfColors.grey200, width: 0.5),
+                      borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
                     ),
-                    child: pw.Image(
-                      pw.MemoryImage(qrCode),
-                      width: qrCodeSize,
-                      height: qrCodeSize,
-                      fit: pw.BoxFit.contain,
+                    constraints: pw.BoxConstraints(
+                      maxWidth: labelWidth * 0.75,
+                      maxHeight: labelHeight * 0.45,
+                    ),
+                    child: pw.Center(
+                      child: pw.Image(
+                        pw.MemoryImage(qrCode),
+                        width: qrCodeSize,
+                        height: qrCodeSize,
+                        fit: pw.BoxFit.contain,
+                      ),
                     ),
                   )
                 : pw.Container(),
@@ -368,16 +380,24 @@ class LabelPrintingService {
           child: pw.Center(
             child: qrCode != null
                 ? pw.Container(
-                    padding: const pw.EdgeInsets.all(2),
-                    constraints: pw.BoxConstraints(
-                      maxWidth: labelWidth * 0.8,
-                      maxHeight: labelHeight * 0.6,
+                    padding: const pw.EdgeInsets.all(4),
+                    margin: const pw.EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                    decoration: pw.BoxDecoration(
+                      color: PdfColors.white,
+                      border: pw.Border.all(color: PdfColors.grey200, width: 0.5),
+                      borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
                     ),
-                    child: pw.Image(
-                      pw.MemoryImage(qrCode),
-                      width: qrCodeSize,
-                      height: qrCodeSize,
-                      fit: pw.BoxFit.contain,
+                    constraints: pw.BoxConstraints(
+                      maxWidth: labelWidth * 0.75,
+                      maxHeight: labelHeight * 0.55,
+                    ),
+                    child: pw.Center(
+                      child: pw.Image(
+                        pw.MemoryImage(qrCode),
+                        width: qrCodeSize,
+                        height: qrCodeSize,
+                        fit: pw.BoxFit.contain,
+                      ),
                     ),
                   )
                 : pw.Container(),
@@ -416,16 +436,24 @@ class LabelPrintingService {
             ),
             qrCode != null
                 ? pw.Container(
-                    padding: const pw.EdgeInsets.all(2),
-                    constraints: pw.BoxConstraints(
-                      maxWidth: labelWidth * 0.4,
-                      maxHeight: labelHeight * 0.4,
+                    padding: const pw.EdgeInsets.all(3),
+                    margin: const pw.EdgeInsets.symmetric(vertical: 2, horizontal: 4),
+                    decoration: pw.BoxDecoration(
+                      color: PdfColors.white,
+                      border: pw.Border.all(color: PdfColors.grey200, width: 0.5),
+                      borderRadius: const pw.BorderRadius.all(pw.Radius.circular(3)),
                     ),
-                    child: pw.Image(
-                      pw.MemoryImage(qrCode),
-                      width: qrCodeSize,
-                      height: qrCodeSize,
-                      fit: pw.BoxFit.contain,
+                    constraints: pw.BoxConstraints(
+                      maxWidth: labelWidth * 0.38,
+                      maxHeight: labelHeight * 0.38,
+                    ),
+                    child: pw.Center(
+                      child: pw.Image(
+                        pw.MemoryImage(qrCode),
+                        width: qrCodeSize,
+                        height: qrCodeSize,
+                        fit: pw.BoxFit.contain,
+                      ),
                     ),
                   )
                 : pw.Container(),
@@ -458,7 +486,7 @@ class LabelPrintingService {
                       (item) => pw.Container(
                         margin: const pw.EdgeInsets.only(bottom: 2),
                         child: pw.Text(
-                          '• ${item.name}${item.description != null && item.description!.isNotEmpty ? ' (${item.description})' : ''}',
+                          '- ${item.name}${item.description != null && item.description!.isNotEmpty ? ' (${item.description})' : ''}',
                           style: pw.TextStyle(fontSize: fontSize),
                           maxLines: 1,
                         ),

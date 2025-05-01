@@ -379,15 +379,11 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
         final int boxId = int.parse(result.toString());
         final box = _boxes.firstWhere((b) => b.id == boxId, orElse: () => throw Exception('Caixa não encontrada'));
         if (mounted) {
-          // Usar pushAndRemoveUntil para substituir a tela atual pela tela de detalhes da caixa
-          // Isso evita que a tela de detalhes seja fechada ao pressionar o botão voltar
-          Navigator.pushAndRemoveUntil(
+          Navigator.push(
             context,
             MaterialPageRoute(
               builder: (context) => BoxDetailScreen(box: box),
             ),
-            // Manter apenas a tela principal na pilha de navegação
-            (route) => route.isFirst,
           );
         }
       } catch (e) {
@@ -422,8 +418,18 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
       selectedBoxes.add(box);
     }
 
+    // Controle para evitar gerações simultâneas de preview
+    bool _isPreviewGenerationInProgress = false;
+    String? _lastRequestedModelName;
+    
     // Função para gerar a visualização prévia do PDF
     Future<void> generatePreview(List<Box> boxes, LabelFormat format, LabelPaperType? paperType) async {
+      // Verificar se já está gerando um preview para evitar loops
+      if (_isPreviewGenerationInProgress) {
+        _logService.debug('Geração de preview já em andamento, ignorando nova solicitação', category: 'preview');
+        return;
+      }
+      
       // Se o tipo de papel for nulo, não podemos gerar a visualização
       if (paperType == null) {
         setState(() {
@@ -432,6 +438,7 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
         });
         return;
       }
+      
       // Verificar se há caixas selecionadas
       if (boxes.isEmpty) {
         setState(() {
@@ -440,12 +447,34 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
         });
         return;
       }
-
+      
+      // Registrar o modelo atual para evitar conflitos
+      final currentModelName = selectedEtiquetaModel?.nome;
+      _lastRequestedModelName = currentModelName;
+      
+      // Marcar que está iniciando a geração
+      _isPreviewGenerationInProgress = true;
+      
       setState(() {
         isGeneratingPreview = true;
       });
 
       try {
+        // Pequeno atraso para garantir que a UI seja atualizada antes de iniciar operações pesadas
+        await Future.delayed(const Duration(milliseconds: 100));
+        
+        // Verificar se o modelo mudou durante o atraso
+        if (_lastRequestedModelName != currentModelName) {
+          _logService.debug('Modelo mudou durante o atraso, cancelando geração', category: 'preview');
+          _isPreviewGenerationInProgress = false;
+          if (mounted) {
+            setState(() {
+              isGeneratingPreview = false;
+            });
+          }
+          return;
+        }
+        
         final Map<int, List<Item>> boxItems = {};
         for (final box in boxes) {
           if (box.id != null) {
@@ -461,6 +490,18 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
           isPreview: true, // Ativar modo de visualização
         );
 
+        // Verificar novamente se o modelo mudou durante a geração
+        if (_lastRequestedModelName != selectedEtiquetaModel?.nome) {
+          _logService.debug('Modelo mudou durante a geração, descartando resultado', category: 'preview');
+          _isPreviewGenerationInProgress = false;
+          if (mounted) {
+            setState(() {
+              isGeneratingPreview = false;
+            });
+          }
+          return;
+        }
+
         if (mounted) {
           setState(() {
             previewPdf = pdfBytes;
@@ -468,16 +509,19 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
           });
         }
       } catch (e) {
+        _logService.error('Erro ao gerar visualização prévia', error: e);
         if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Erro ao gerar visualização: ${e.toString()}'))
+          );
           setState(() {
             previewPdf = null;
             isGeneratingPreview = false;
           });
-          _logService.error('Erro ao gerar visualização prévia', error: e);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Erro ao gerar visualização: ${e.toString()}'))
-          );
         }
+      } finally {
+        // Garantir que o flag seja resetado mesmo em caso de erro
+        _isPreviewGenerationInProgress = false;
       }
     }
 
@@ -582,65 +626,114 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
                                 'Selecione apenas um modelo:',
                                 style: TextStyle(fontWeight: FontWeight.bold),
                               ),
-                            ),
-                            ...modelosPimaco.map((modelo) {
-                              // Determinar o tipo de papel para este modelo
-                              String paperType = '';
-                              LabelPaperType modelPaperType = _mapModeloToPaperType(modelo);
-                              switch (modelPaperType) {
-                                case LabelPaperType.pimaco6180:
-                                  paperType = 'A4 (3 colunas)';
-                                  break;
-                                case LabelPaperType.pimaco6082:
-                                  paperType = 'A4 (2 colunas)';
-                                  break;
-                                case LabelPaperType.a4Full:
-                                  paperType = 'A4 (página inteira)';
-                                  break;
-                              }
-                              
-                              return RadioListTile<LabelPaperType>(
-                                title: Text('${modelo.nome} - $paperType'),
-                                subtitle: Text(
-                                  '${modelo.larguraCm.toStringAsFixed(1)}x${modelo.alturaCm.toStringAsFixed(1)}cm (${modelo.etiquetasPorFolha} por folha)',
-                                  style: TextStyle(fontSize: 12),
-                                ),
-                                value: modelPaperType, // Usar o tipo de papel como valor
-                                groupValue: selectedPaperType, // Comparar com o tipo de papel selecionado
-                                onChanged: (LabelPaperType? value) {
-                                  if (value != null) {
-                                    // Salvar último modelo usado
-                                    _preferencesService.saveLastUsedLabelModel(modelo.nome);
-                                    
-                                    // Log para debug
-                                    _logService.debug('Modelo alterado para: ${modelo.nome}, Tipo: $value', category: 'preview');
-                                    
-                                    // Atualizar estado sem gerar preview imediatamente
-                                    setState(() {
-                                      selectedEtiquetaModel = modelo; // Armazenar o modelo completo
-                                      selectedPaperType = value; // Armazenar o tipo de papel
-                                      previewPdf = null;
-                                      isGeneratingPreview = false; // Não iniciar geração ainda
-                                    });
-                                    
-                                    // Usar um pequeno atraso para evitar múltiplas atualizações
-                                    // quando o usuário está trocando rapidamente entre modelos
-                                    Future.delayed(const Duration(milliseconds: 300), () {
-                                      if (mounted && selectedPaperType == value) {
-                                        setState(() {
-                                          isGeneratingPreview = true;
-                                        });
-                                        if (selectedBoxes.isNotEmpty) {
-                                          generatePreview(selectedBoxes, selectedFormat, value);
-                                        }
-                                      }
-                                    });
+                                                    // Lista de modelos com seleção única e visual melhorado
+                            Container(
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade50,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: ListView.separated(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                itemCount: modelosPimaco.length,
+                                separatorBuilder: (context, index) => const Divider(height: 1),
+                                itemBuilder: (context, index) {
+                                  final modelo = modelosPimaco[index];
+                                  // Determinar o tipo de papel para este modelo
+                                  String paperType = '';
+                                  LabelPaperType modelPaperType = _mapModeloToPaperType(modelo);
+                                  switch (modelPaperType) {
+                                    case LabelPaperType.pimaco6180:
+                                      paperType = 'A4 (3 colunas)';
+                                      break;
+                                    case LabelPaperType.pimaco6082:
+                                      paperType = 'A4 (2 colunas)';
+                                      break;
+                                    case LabelPaperType.a4Full:
+                                      paperType = 'A4 (página inteira)';
+                                      break;
                                   }
+                                  
+                                  // Verificar se este modelo está selecionado
+                                  bool isSelected = selectedEtiquetaModel?.nome == modelo.nome;
+                                  
+                                  return Material(
+                                    color: isSelected ? Theme.of(context).primaryColor.withOpacity(0.1) : Colors.transparent,
+                                    child: InkWell(
+                                      onTap: () {
+                                        // Evitar seleção do mesmo modelo ou durante geração
+                                        if (isGeneratingPreview || selectedEtiquetaModel?.nome == modelo.nome) {
+                                          return;
+                                        }
+                                        
+                                        // Salvar último modelo usado
+                                        _preferencesService.saveLastUsedLabelModel(modelo.nome);
+                                        
+                                        // Log para debug
+                                        _logService.debug('Modelo alterado para: ${modelo.nome}, Tipo: $modelPaperType', category: 'preview');
+                                        
+                                        // Atualizar estado e iniciar geração de preview
+                                        setState(() {
+                                          selectedEtiquetaModel = modelo; // Armazenar o modelo completo
+                                          selectedPaperType = modelPaperType; // Armazenar o tipo de papel
+                                          previewPdf = null;
+                                          isGeneratingPreview = true; // Indicar que está gerando preview
+                                        });
+                                        
+                                        // Iniciar geração de preview diretamente sem atraso
+                                        if (selectedBoxes.isNotEmpty) {
+                                          generatePreview(selectedBoxes, selectedFormat, modelPaperType);
+                                        } else {
+                                          setState(() {
+                                            isGeneratingPreview = false;
+                                          });
+                                        }
+                                      },
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                                        child: Row(
+                                          children: [
+                                            Radio<String>(
+                                              value: modelo.nome,
+                                              groupValue: selectedEtiquetaModel?.nome,
+                                              onChanged: (_) {}, // Controlado pelo InkWell
+                                              activeColor: Theme.of(context).primaryColor,
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    '${modelo.nome} - $paperType',
+                                                    style: TextStyle(
+                                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 4),
+                                                  Text(
+                                                    '${modelo.larguraCm.toStringAsFixed(1)}x${modelo.alturaCm.toStringAsFixed(1)}cm (${modelo.etiquetasPorFolha} por folha)',
+                                                    style: TextStyle(
+                                                      fontSize: 12,
+                                                      color: Colors.grey.shade700,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            if (isSelected)
+                                              Icon(
+                                                Icons.check_circle,
+                                                color: Theme.of(context).primaryColor,
+                                              ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  );
                                 },
-                                activeColor: Theme.of(context).primaryColor,
-                                dense: true,
-                              );
-                            }).toList(),
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -658,81 +751,88 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
                           border: Border.all(color: Colors.grey),
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: selectedBoxes.isNotEmpty
-                            ? Center(
-                                child: isGeneratingPreview
-                                    ? const CircularProgressIndicator()
-                                    : Container(
-                                        padding: const EdgeInsets.all(8),
-                                        child: Column(
-                                          mainAxisAlignment: MainAxisAlignment.center,
-                                          children: [
-                                            Text(
-                                              '${selectedBoxes.length} etiquetas selecionadas',
-                                              style: const TextStyle(fontWeight: FontWeight.bold),
-                                            ),
-                                            const SizedBox(height: 10),
-                                            Row(
+                        child: selectedBoxes.isEmpty
+                            ? const Center(
+                                child: Text('Selecione pelo menos uma caixa para visualizar'),
+                              )
+                            : selectedPaperType == null
+                                ? const Center(
+                                    child: Text('Selecione um modelo de etiqueta'),
+                                  )
+                                : Center(
+                                    child: isGeneratingPreview
+                                        ? Column(
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            children: [
+                                              const CircularProgressIndicator(),
+                                              const SizedBox(height: 10),
+                                              Text('Gerando visualização para ${selectedEtiquetaModel?.nome ?? ""}')
+                                            ],
+                                          )
+                                        : Container(
+                                            padding: const EdgeInsets.all(8),
+                                            child: Column(
                                               mainAxisAlignment: MainAxisAlignment.center,
                                               children: [
-                                                ElevatedButton.icon(
-                                                  onPressed: () async {
-                                                    if (previewPdf == null) return;
-                                                    
-                                                    ScaffoldMessenger.of(context).showSnackBar(
-                                                      const SnackBar(content: Text('Abrindo visualização...')),
-                                                    );
-                                                    
-                                                    // Pequeno atraso para garantir que o contexto esteja estável
-                                                    Future.delayed(const Duration(milliseconds: 300), () async {
-                                                      try {
-                                                        if (mounted && previewPdf != null) {
+                                                Text(
+                                                  '${selectedBoxes.length} etiquetas selecionadas',
+                                                  style: const TextStyle(fontWeight: FontWeight.bold),
+                                                ),
+                                                const SizedBox(height: 10),
+                                                Row(
+                                                  mainAxisAlignment: MainAxisAlignment.center,
+                                                  children: [
+                                                    ElevatedButton.icon(
+                                                      onPressed: () async {
+                                                        if (previewPdf == null) return;
+                                                        
+                                                        ScaffoldMessenger.of(context).showSnackBar(
+                                                          const SnackBar(content: Text('Abrindo visualização...')),
+                                                        );
+                                                        
+                                                        // Pequeno atraso para garantir que o contexto esteja estável
+                                                        Future.delayed(const Duration(milliseconds: 300), () async {
+                                                          try {
+                                                            if (mounted && previewPdf != null) {
+                                                              await Printing.layoutPdf(
+                                                                onLayout: (_) => previewPdf!,
+                                                                name: 'Etiquetas BoxMagic',
+                                                                format: PdfPageFormat.a4,
+                                                              );
+                                                            }
+                                                          } catch (e) {
+                                                            if (mounted) {
+                                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                                SnackBar(content: Text('Erro ao abrir visualização: ${e.toString()}')),
+                                                              );
+                                                            }
+                                                          }
+                                                        });
+                                                      },
+                                                      icon: const Icon(Icons.preview),
+                                                      label: const Text('Visualizar'),
+                                                    ),
+                                                    const SizedBox(width: 10),
+                                                    ElevatedButton.icon(
+                                                      onPressed: () async {
+                                                        if (previewPdf == null) return;
+                                                        
+                                                        ScaffoldMessenger.of(context).showSnackBar(
+                                                          const SnackBar(content: Text('Imprimindo...')),
+                                                        );
+                                                        
+                                                        try {
                                                           await Printing.layoutPdf(
                                                             onLayout: (_) => previewPdf!,
                                                             name: 'Etiquetas BoxMagic',
                                                             format: PdfPageFormat.a4,
+                                                            usePrinterSettings: true,
                                                           );
-                                                        }
-                                                      } catch (e) {
-                                                        if (mounted) {
-                                                          ScaffoldMessenger.of(context).showSnackBar(
-                                                            SnackBar(content: Text('Erro ao abrir visualização: $e')),
-                                                          );
-                                                        }
-                                                      }
-                                                    });
-                                                  },
-                                                  icon: const Icon(Icons.preview),
-                                                  label: const Text('Visualizar PDF'),
-                                                ),
-                                                const SizedBox(width: 8),
-                                                ElevatedButton.icon(
-                                                  onPressed: selectedPaperType == null ? null : () async {
-                                    if (selectedPaperType == null) {
-                                                      ScaffoldMessenger.of(context).showSnackBar(
-                                                        const SnackBar(
-                                                          content: Text('Selecione um modelo de etiqueta primeiro'),
-                                                          duration: Duration(seconds: 2),
-                                                        ),
-                                                      );
-                                                      return;
-                                                    }
-                                                    
-                                                    // Mostrar indicador de progresso
-                                                    ScaffoldMessenger.of(context).showSnackBar(
-                                                      const SnackBar(
-                                                        content: Text('Exportando SVG...'),
-                                                        duration: Duration(seconds: 1),
-                                                      ),
-                                                    );
-                                                    
-                                                    // Usar o modelo específico selecionado
-                                    final Etiqueta selectedEtiqueta = selectedEtiquetaModel ?? modelosPimaco.first;
-                                                    
-                                                    // Converter dimensões para pixels (assumindo 96 DPI para SVG)
-                                                    final double labelWidthPx = selectedEtiqueta.larguraCm * 37.8; // 1cm = 37.8px em 96 DPI
-                                                    final double labelHeightPx = selectedEtiqueta.alturaCm * 37.8;
-                                                    
+                                                        } catch (e) {
+                                                          if (mounted) {
+                                                            ScaffoldMessenger.of(context).showSnackBar(
+                                                              SnackBar(content: Text('Erro ao imprimir: ${e.toString()}')),
+                                                            );
                                                     // Calcular o número de etiquetas por linha e por coluna com base no modelo selecionado
                                                      int labelsPerRow = 0;
                                                      int labelsPerColumn = 0;
@@ -1035,18 +1135,6 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
                                                     backgroundColor: Colors.amber[700],
                                                     foregroundColor: Colors.white,
                                                   ),
-                                                ),
-                                              ],
-                                            ),
-                                          ],
-                                        ),
-                                      )
-                                )
-                            : const Center(child: Text('Nenhuma etiqueta selecionada')),
-                      ),
-                      const SizedBox(height: 10),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Row(
                             children: [
