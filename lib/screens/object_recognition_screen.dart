@@ -9,7 +9,7 @@ import 'package:boxmagic/services/gemini_service.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:image_gallery_saver/image_gallery_saver.dart';
+// import 'package:image_gallery_saver/image_gallery_saver.dart'; // Removido para permitir compilação
 
 class ObjectRecognitionScreen extends StatefulWidget {
   final List<Box> boxes;
@@ -122,31 +122,31 @@ class _ObjectRecognitionScreenState extends State<ObjectRecognitionScreen> {
         // No ambiente web, não podemos salvar arquivos diretamente
         return fileName; // Apenas retorna o nome do arquivo para referência
       } else {
-        // Em dispositivos móveis, salvar na galeria
-        final result = await ImageGallerySaver.saveImage(
-          bytes,
-          name: fileName,
-          quality: 80,
-        );
+        // Em dispositivos móveis, salvar em diretório temporário
+        // Código alternativo que não usa ImageGallerySaver
+        final directory = await getApplicationDocumentsDirectory();
+        final filePath = '${directory.path}/$fileName';
+        final file = File(filePath);
+        await file.writeAsBytes(bytes);
         
-        if (result['isSuccess']) {
-          // Em Android, o caminho pode estar em result['filePath']
-          // Em iOS, geralmente não temos acesso ao caminho real
-          final savedPath = result['filePath'] ?? fileName;
-          
-          // Mostrar mensagem de sucesso
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Imagem salva na galeria'),
-                backgroundColor: Colors.green,
-                duration: Duration(seconds: 1),
-              ),
-            );
-          }
-          
-          return savedPath;
+        // Retornar o caminho do arquivo como resultado
+        final result = {'filePath': filePath};
+        
+        // Com nossa implementação alternativa, sempre temos o caminho do arquivo
+        final savedPath = result['filePath'];
+        
+        // Mostrar mensagem de sucesso
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Imagem salva nos documentos do app'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 1),
+            ),
+          );
         }
+        
+        return savedPath;
       }
     } catch (e) {
       if (mounted) {
