@@ -68,6 +68,9 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
   // Mapeia Etiqueta para LabelPaperType
   LabelPaperType _mapModeloToPaperType(Etiqueta? modelo) {
     if (modelo == null) return LabelPaperType.pimaco6180;
+    
+    // Mapear modelos para tipos de papel
+    // Todos os modelos Pimaco são para papel A4
     switch (modelo.nome) {
       case 'Pimaco 6180':
         return LabelPaperType.pimaco6180;
@@ -75,10 +78,29 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
         return LabelPaperType.pimaco6082;
       case 'A4 Completo':
         return LabelPaperType.a4Full;
-      default:
-        // Você pode adicionar mais casos conforme necessário
-        // Para modelos não suportados pelo serviço, retorna padrão
+      // Modelos com 3 etiquetas por linha (como 6180)
+      case 'Pimaco A4204':
+      case 'Pimaco A4363':
+      case 'Pimaco 6095':
         return LabelPaperType.pimaco6180;
+      // Modelos com 2 etiquetas por linha (como 6082)
+      case 'Pimaco A4381':
+      case 'Pimaco 6080':
+      case 'Pimaco 6081':
+      case 'Pimaco 6096':
+        return LabelPaperType.pimaco6082;
+      // Modelos com 1 etiqueta por linha (como A4 completo)
+      case 'Pimaco 6185':
+        return LabelPaperType.a4Full;
+      default:
+        // Para modelos não mapeados explicitamente, escolher com base no número de etiquetas por folha
+        if (modelo.etiquetasPorFolha <= 5) {
+          return LabelPaperType.a4Full;
+        } else if (modelo.etiquetasPorFolha <= 15) {
+          return LabelPaperType.pimaco6082;
+        } else {
+          return LabelPaperType.pimaco6180;
+        }
     }
   }
 
@@ -517,39 +539,78 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
                         style: TextStyle(fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 5),
-                      // Dropdown para selecionar modelo Pimaco
-                      DropdownButtonFormField<Etiqueta>(
-                        value: modelosPimaco.first,
-                        items: modelosPimaco.map((modelo) {
-                          return DropdownMenuItem<Etiqueta>(
-                            value: modelo,
-                            child: Text(
-                              '${modelo.nome} - ${modelo.larguraCm.toStringAsFixed(1)}x${modelo.alturaCm.toStringAsFixed(1)}cm (${modelo.etiquetasPorFolha} por folha)',
-                            ),
-                          );
-                        }).toList(),
-                        onChanged: (Etiqueta? value) {
-                          if (value != null) {
-                            // Primeiro, mapear para o tipo de papel correto
-                            final newPaperType = _mapModeloToPaperType(value);
-                            
-                            // Salvar último modelo usado
-                            _preferencesService.saveLastUsedLabelModel(value.nome);
-                            
-                            // Log para debug
-                            _logService.debug('Modelo alterado para: ${value.nome}, Tipo: $newPaperType', category: 'preview');
-                            
-                            // Atualizar estado em uma única chamada para evitar loops
-                            setState(() {
-                              selectedPaperType = newPaperType;
-                              previewPdf = null;
-                              isGeneratingPreview = true;
-                            });
-                            
-                            // Gerar novo preview diretamente, sem delay
-                            generatePreview(selectedBoxes, selectedFormat, newPaperType);
-                          }
-                        },
+                      // Dropdown com checkboxes para selecionar modelo Pimaco
+                      Container(
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey.shade300),
+                          borderRadius: BorderRadius.circular(4.0),
+                        ),
+                        child: ExpansionTile(
+                          title: Text(
+                            // Mostrar o modelo selecionado ou um texto padrão
+                            modelosPimaco.firstWhere(
+                              (modelo) => _mapModeloToPaperType(modelo) == selectedPaperType,
+                              orElse: () => modelosPimaco.first,
+                            ).nome,
+                            style: TextStyle(fontSize: 16),
+                          ),
+                          subtitle: Text(
+                            'Clique para selecionar um modelo',
+                            style: TextStyle(fontSize: 12, color: Colors.grey),
+                          ),
+                          children: [
+                            ...modelosPimaco.map((modelo) {
+                              // Verificar se este modelo está selecionado
+                              final isSelected = _mapModeloToPaperType(modelo) == selectedPaperType;
+                              
+                              // Determinar o tipo de papel para este modelo
+                              String paperType = '';
+                              switch (_mapModeloToPaperType(modelo)) {
+                                case LabelPaperType.pimaco6180:
+                                  paperType = 'A4 (3 colunas)';
+                                  break;
+                                case LabelPaperType.pimaco6082:
+                                  paperType = 'A4 (2 colunas)';
+                                  break;
+                                case LabelPaperType.a4Full:
+                                  paperType = 'A4 (página inteira)';
+                                  break;
+                              }
+                              
+                              return CheckboxListTile(
+                                title: Text('${modelo.nome} - $paperType'),
+                                subtitle: Text(
+                                  '${modelo.larguraCm.toStringAsFixed(1)}x${modelo.alturaCm.toStringAsFixed(1)}cm (${modelo.etiquetasPorFolha} por folha)',
+                                  style: TextStyle(fontSize: 12),
+                                ),
+                                value: isSelected,
+                                onChanged: (bool? value) {
+                                  if (value == true) {
+                                    // Primeiro, mapear para o tipo de papel correto
+                                    final newPaperType = _mapModeloToPaperType(modelo);
+                                    
+                                    // Salvar último modelo usado
+                                    _preferencesService.saveLastUsedLabelModel(modelo.nome);
+                                    
+                                    // Log para debug
+                                    _logService.debug('Modelo alterado para: ${modelo.nome}, Tipo: $newPaperType', category: 'preview');
+                                    
+                                    // Atualizar estado em uma única chamada para evitar loops
+                                    setState(() {
+                                      selectedPaperType = newPaperType;
+                                      previewPdf = null;
+                                      isGeneratingPreview = true;
+                                    });
+                                    
+                                    // Gerar novo preview diretamente, sem delay
+                                    generatePreview(selectedBoxes, selectedFormat, newPaperType);
+                                  }
+                                },
+                                controlAffinity: ListTileControlAffinity.leading,
+                              );
+                            }).toList(),
+                          ],
+                        ),
                       ),
                       const SizedBox(height: 20),
                       const Text(
