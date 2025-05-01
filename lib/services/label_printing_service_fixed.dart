@@ -249,21 +249,19 @@ class LabelPrintingService {
   // Construir conteúdo da etiqueta com base no formato selecionado
   pw.Widget _buildLabelContent(
     Box box,
-    List<dynamic> items,
+    List<Item> items,
     LabelFormat format,
     Map<int, Uint8List> qrCodes,
     double labelWidth,
     double labelHeight,
   ) {
-    // Converter a lista dinâmica para uma lista de Item
-    final List<Item> itemsList = items.cast<Item>();
     switch (format) {
       case LabelFormat.nameWithBarcodeAndId:
         return _buildNameWithBarcodeAndId(box, qrCodes, labelWidth, labelHeight);
       case LabelFormat.idWithBarcode:
         return _buildIdWithBarcode(box, qrCodes, labelWidth, labelHeight);
       case LabelFormat.idWithBarcodeAndItems:
-        return _buildIdWithBarcodeAndItems(box, itemsList, qrCodes, labelWidth, labelHeight);
+        return _buildIdWithBarcodeAndItems(box, items, qrCodes, labelWidth, labelHeight);
     }
   }
 

@@ -408,6 +408,7 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
     final Map<int, bool> selectedBoxMap = {};
     LabelFormat selectedFormat = LabelFormat.nameWithBarcodeAndId;
     LabelPaperType? selectedPaperType = null; // Inicialmente nenhum modelo selecionado
+    Etiqueta? selectedEtiquetaModel = null; // Armazenar o modelo específico selecionado
     Uint8List? previewPdf;
     bool isGeneratingPreview = false;
 
@@ -600,8 +601,8 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
                                   '${modelo.larguraCm.toStringAsFixed(1)}x${modelo.alturaCm.toStringAsFixed(1)}cm (${modelo.etiquetasPorFolha} por folha)',
                                   style: TextStyle(fontSize: 12),
                                 ),
-                                value: modelPaperType,
-                                groupValue: selectedPaperType,
+                                value: modelPaperType, // Usar o tipo de papel como valor
+                                groupValue: selectedPaperType, // Comparar com o tipo de papel selecionado
                                 onChanged: (LabelPaperType? value) {
                                   if (value != null) {
                                     // Salvar último modelo usado
@@ -612,7 +613,8 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
                                     
                                     // Atualizar estado sem gerar preview imediatamente
                                     setState(() {
-                                      selectedPaperType = value;
+                                      selectedEtiquetaModel = modelo; // Armazenar o modelo completo
+                                      selectedPaperType = value; // Armazenar o tipo de papel
                                       previewPdf = null;
                                       isGeneratingPreview = false; // Não iniciar geração ainda
                                     });
@@ -702,7 +704,7 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
                                                 const SizedBox(width: 8),
                                                 ElevatedButton.icon(
                                                   onPressed: selectedPaperType == null ? null : () async {
-                                                    if (selectedPaperType == null) {
+                                    if (selectedPaperType == null) {
                                                       ScaffoldMessenger.of(context).showSnackBar(
                                                         const SnackBar(
                                                           content: Text('Selecione um modelo de etiqueta primeiro'),
@@ -720,11 +722,8 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
                                                       ),
                                                     );
                                                     
-                                                    // Obter dimensões da etiqueta selecionada
-                                                    final Etiqueta selectedEtiqueta = modelosPimaco.firstWhere(
-                                                      (modelo) => _mapModeloToPaperType(modelo) == selectedPaperType,
-                                                      orElse: () => modelosPimaco.first,
-                                                    );
+                                                    // Usar o modelo específico selecionado
+                                    final Etiqueta selectedEtiqueta = selectedEtiquetaModel ?? modelosPimaco.first;
                                                     
                                                     // Converter dimensões para pixels (assumindo 96 DPI para SVG)
                                                     final double labelWidthPx = selectedEtiqueta.larguraCm * 37.8; // 1cm = 37.8px em 96 DPI
