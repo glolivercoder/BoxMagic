@@ -610,17 +610,25 @@ class _BoxesScreenState extends State<BoxesScreen> with AutomaticKeepAliveClient
                                     // Log para debug
                                     _logService.debug('Modelo alterado para: ${modelo.nome}, Tipo: $value', category: 'preview');
                                     
-                                    // Atualizar estado em uma única chamada para evitar loops
+                                    // Atualizar estado sem gerar preview imediatamente
                                     setState(() {
                                       selectedPaperType = value;
                                       previewPdf = null;
-                                      isGeneratingPreview = true;
+                                      isGeneratingPreview = false; // Não iniciar geração ainda
                                     });
                                     
-                                    // Gerar novo preview diretamente, sem delay
-                                    if (selectedBoxes.isNotEmpty) {
-                                      generatePreview(selectedBoxes, selectedFormat, value);
-                                    }
+                                    // Usar um pequeno atraso para evitar múltiplas atualizações
+                                    // quando o usuário está trocando rapidamente entre modelos
+                                    Future.delayed(const Duration(milliseconds: 300), () {
+                                      if (mounted && selectedPaperType == value) {
+                                        setState(() {
+                                          isGeneratingPreview = true;
+                                        });
+                                        if (selectedBoxes.isNotEmpty) {
+                                          generatePreview(selectedBoxes, selectedFormat, value);
+                                        }
+                                      }
+                                    });
                                   }
                                 },
                                 activeColor: Theme.of(context).primaryColor,
