@@ -1,13 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:boxmagic/screens/main_screen.dart';
 import 'package:boxmagic/services/database_helper.dart';
+import 'package:boxmagic/services/log_service.dart';
 
 void main() async {
   // Ensure Flutter is initialized
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize the database (will be mocked in web environment)
-  await DatabaseHelper.instance.database;
+  // Iniciar serviço de log
+  final logService = LogService();
+  logService.info('Iniciando aplicativo BoxMagic', category: 'startup');
+
+  // Initialize the database with error handling
+  try {
+    logService.info('Inicializando banco de dados', category: 'startup');
+    await DatabaseHelper.instance.database;
+    logService.info('Banco de dados inicializado com sucesso', category: 'startup');
+  } catch (e) {
+    logService.error('Erro ao inicializar banco de dados: $e', category: 'startup');
+    // Continuar mesmo com erro no banco de dados
+    // O DatabaseHelper deve ter um fallback para armazenamento em memória
+  }
 
   // Run the app
   runApp(const BoxMagicApp());

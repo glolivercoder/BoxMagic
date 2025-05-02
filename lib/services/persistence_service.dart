@@ -26,10 +26,7 @@ class PersistenceService {
   static const String _backupDirPrefKey = 'backup_directory_path';
 
   // Pasta de backups - pasta fixa na raiz do projeto
-  static const String _backupFolderName = 'backups';
-
-  // Pasta de backup fixa para facilitar a localização
-  static const String _fixedBackupPath = 'G:/Projetos2025BKP/BoxMagicFlutter/boxmagic/backups';
+  // Removido: static const String _backupFolderName = 'backups';
 
   // Método para obter o diretório de backup
   Future<Directory> _getBackupDirectory() async {
@@ -40,6 +37,26 @@ class PersistenceService {
       // Retornamos um diretório temporário que não será usado
       _logService.warning('Ambiente web detectado, backups serão armazenados em memória', category: 'backup');
       backupDir = Directory('web_backup_dir');
+      return backupDir;
+    }
+
+    try {
+      // Usar o diretório de documentos do aplicativo para armazenar backups
+      final appDir = await getApplicationDocumentsDirectory();
+      backupDir = Directory('${appDir.path}/backups');
+      if (!await backupDir.exists()) {
+        await backupDir.create(recursive: true);
+      }
+      _logService.info('Diretório de backup: ${backupDir.path}', category: 'backup');
+      return backupDir;
+    } catch (e) {
+      _logService.error('Erro ao criar diretório de backup: $e', category: 'backup');
+      // Fallback para diretório temporário
+      final tempDir = await getTemporaryDirectory();
+      backupDir = Directory('${tempDir.path}/backups');
+      if (!await backupDir.exists()) {
+        await backupDir.create(recursive: true);
+      }
       return backupDir;
     }
 

@@ -8,6 +8,7 @@ class PreferencesService {
 
   static const String _categoriesKey = 'boxmagic_categories';
   static const String _nextBoxIdKey = 'boxmagic_next_id';
+  static const String _nextItemIdKey = 'boxmagic_next_item_id';
   static const String _themeKey = 'boxmagic_theme';
   static const String _labelSizeKey = 'boxmagic_label_size';
   static const String _lastModelKey = 'last_model_name';
@@ -154,5 +155,35 @@ class PreferencesService {
   Future<String?> getLastType() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString(_lastTypeKey);
+  }
+
+  // Get next item ID
+  Future<int> getNextItemId() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_nextItemIdKey) ?? 5001;
+  }
+
+  // Save next item ID
+  Future<bool> saveNextItemId(int id) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.setInt(_nextItemIdKey, id);
+  }
+
+  // Increment and get next item ID
+  Future<int> incrementAndGetNextItemId() async {
+    final currentId = await getNextItemId();
+
+    // Garantir que o ID tenha no máximo 4 dígitos
+    int idToUse = currentId;
+    if (idToUse > 9999) {
+      // Se passar de 9999, volta para 5001
+      idToUse = 5001;
+    }
+
+    // Incrementar para o próximo ID
+    final nextId = idToUse + 1;
+    await saveNextItemId(nextId);
+
+    return idToUse;
   }
 }
